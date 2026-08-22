@@ -73,7 +73,7 @@ Two independent id spaces meet at the daemon. Never leak one into the other.
 
 ## Module contract
 
-Shared constants already live in `acpw.paths`: `DEFAULT_POOL_BIND = "127.0.0.1:48190"` and `POOL_STATE_NAME = "_pool"`. Response models already live in `acpw.types`: `PoolWorker`, `PoolStatus`, `PoolStartResponse`, `PoolStopResponse`.
+Shared constants already live in `acpw.paths`: `DEFAULT_POOL_BIND = "0.0.0.0:48190"` and `POOL_STATE_NAME = "_pool"`. Response models already live in `acpw.types`: `PoolWorker`, `PoolStatus`, `PoolStartResponse`, `PoolStopResponse`.
 
 `acpw/daemon.py` exposes exactly:
 

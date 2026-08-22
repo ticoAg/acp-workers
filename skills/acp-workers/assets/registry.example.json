@@ -1,8 +1,13 @@
 {
   "workers": {
-    "grok": { "kind": "grok", "enabled": true, "bind": "127.0.0.1:48191" },
-    "claude": { "kind": "claude", "enabled": true, "bind": "127.0.0.1:48192" },
+    "grok": { "kind": "grok", "enabled": true, "bind": "0.0.0.0:48191" },
+    "claude": { "kind": "claude", "enabled": true, "bind": "0.0.0.0:48192" },
     "codex": { "kind": "codex", "enabled": true, "bind": "127.0.0.1:48193" },
-    "cursor": { "kind": "cursor", "enabled": true, "bind": "127.0.0.1:48194" }
+    "cursor": {
+      "kind": "cursor",
+      "enabled": true,
+      "bind": "0.0.0.0:48194",
+      "stdio_argv": ["/opt/cursor/cursor-agent", "acp"]
+    }
   }
 }

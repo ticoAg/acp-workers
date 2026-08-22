@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "ACP",
-      "description": "Skills for dispatching work to resident Agent Client Protocol workers on loopback.",
+      "description": "Skills for dispatching work to resident Agent Client Protocol workers on this machine.",
       "skills": ["acp-workers"]
     }
   ]

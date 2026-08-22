@@ -1,6 +1,6 @@
 ---
 name: acp-workers
-description: "Dispatch coding work to resident ACP workers over loopback WebSocket via the acpw CLI (Grok native serve; Claude/Codex/Cursor stdio bridged). Host agent plans, scopes, and verifies; workers execute. USE FOR: acpw ls/up/run, acpw pool, --pool/--no-pool, 48190, 并发派发, grok agent serve, ACP websocket, 常驻 ACP, 派发给 grok/claude/codex/cursor, 服务发现. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
+description: "Dispatch coding work to resident ACP workers over a local WebSocket via the acpw CLI (Grok native serve; Claude/Codex/Cursor stdio bridged). Host agent plans, scopes, and verifies; workers execute. USE FOR: acpw ls/up/run, acpw pool, --pool/--no-pool, 48190, 并发派发, grok agent serve, ACP websocket, 常驻 ACP, 派发给 grok/claude/codex/cursor, 服务发现. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
 license: MIT
 compatibility: "Requires Python 3.12+ and uv. CLI name is acpw."
 metadata:
@@ -88,7 +88,7 @@ acpw run grok -f /tmp/task.txt
 | 命令 | 作用 |
 | --- | --- |
 | `version` | 打印已装版本、Python、包路径（也可 `acpw --version`） |
-| `selfcheck` | 八项自检 + mock 往返；有 `fail` 则退出 1（`--no-live` 只查静态项） |
+| `selfcheck` | 九项自检 + mock 往返；有 `fail` 则退出 1（`--no-live` 只查静态项） |
 | `ls` | 配置 + 探活 + 进程（别名 `status`） |
 | `doctor` | 检查适配器二进制是否在 PATH |
 | `up` / `down` | 后台起停（别名 `start` / `stop`） |

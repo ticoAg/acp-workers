@@ -19,7 +19,7 @@ bash scripts/ensure-acpw.sh --no-selfcheck  # 跳过自检
 `ensure-acpw.sh` 装完会自动跑一次；也可以随时手动跑。
 
 ```bash
-acpw selfcheck            # 八项，含 mock 往返；任一 fail 退出 1
+acpw selfcheck            # 九项，含 mock 往返；任一 fail 退出 1
 acpw selfcheck --no-live  # 只查静态项，不起进程
 ```
 
@@ -32,16 +32,19 @@ acpw selfcheck --no-live  # 只查静态项，不起进程
 | `state` | state 目录不可写 |
 | `completion` | warn：没注册补全，跑 `acpw install` |
 | `adapters` | 一个 agent 二进制都没有；缺一部分只是 warn |
+| `exposure` | 只会 warn，不会 fail：列出绑在非回环地址的 worker。默认就是 `0.0.0.0`，所以装完看到它是正常的 |
 | `roundtrip` | 起一个临时 mock worker、派一条 prompt、比对回包。这一项过了才说明链路真的通 |
 
 `roundtrip` 用随机空闲端口，worker 名带进程号，跑完即停并从 registry 里删掉，不会碰你已有的 worker。
+
+`exposure` 这一条值得当回事：worker 是 always-approve，`server-key` 明文过线。默认 `0.0.0.0` 图的是省事，别把这些端口放到不可信网络；要收回回环就给 worker 显式设 `bind`。
 
 ## 版本
 
 skill 和 CLI 同版本号发布。三处必须一致：`packages/acpw/pyproject.toml`、`skills/acp-workers/metadata.json`、`SKILL.md` frontmatter 里的 `metadata.version`；CI 会卡这一点。
 
 ```bash
-acpw version   # {"ok":true,"version":"0.1.0","python":"3.12.14","location":"…"}
+acpw version   # {"ok":true,"version":"0.3.0","python":"3.12.14","location":"…"}
 acpw --version # 同上
 ```
 
@@ -84,14 +87,16 @@ acpw install   # bash 补全 → ~/.local/share/bash-completion/completions/acpw
 | --- | --- | --- |
 | `~/.config/acp-workers/registry.json` | worker 配置，结构见 [../assets/registry.example.json](../assets/registry.example.json) | `ACPW_CONFIG_DIR` |
 | `~/.local/state/acp-workers/<name>/` | secret、pid、日志 | `ACPW_STATE_DIR` |
+| `~/.local/state/acp-workers/_pool/` | pool daemon 的 secret、pid、日志、bind | `ACPW_STATE_DIR`；bind 另可用 `ACPW_POOL_BIND` |
 
-registry 不需要手写，`acpw add` / `acpw up` 会维护。示例文件只用于对照字段。
+registry 不需要手写，`acpw add` / `acpw up` 会维护。示例文件只用于对照字段：`bind` 默认 `0.0.0.0`，写成 `127.0.0.1` 就只收本机；`stdio_argv` 用于二进制不在默认位置时覆盖。`_pool` 下划线开头，不会和 worker 名字撞。
 
 ## Uninstall
 
 顺序固定：先停 worker，再卸 CLI 与补全，最后卸 skill。
 
 ```bash
+acpw pool down          # 起过 pool 的话先停，它会连带收掉名下所有 child
 acpw down grok          # 每个 live worker 停一次
 acpw uninstall          # 补全文件 + ~/.bashrc 标记
 acpw uninstall --purge  # 上一项 + 停全部已登记 worker + 删 config 与 state 目录

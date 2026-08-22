@@ -39,6 +39,8 @@ It does **not** inherit Cursor Auto-run. Deny rules still win over always-approv
 
 Claude / Codex / Cursor have no Grok-style `serve`. `acpw gateway` keeps one stdio ACP child and one in-flight WebSocket client. `initialize`/`authenticate` results are cached so the next `ping`/`run` does not re-handshake the child.
 
-Default binds: grok `127.0.0.1:48191`, claude `48192`, codex `48193`, cursor `48194`.
+One client at a time is the limit that `acpw pool` lifts: the same children move under one daemon that serves many connections and many concurrent requests. See [pool.md](pool.md).
+
+Default binds: grok `0.0.0.0:48191`, claude `48192`, codex `48193`, cursor `48194`, pool `48190`. The listen address is `0.0.0.0`; clients dial `127.0.0.1`.
 
 Adapter defaults (binary, `stdio_argv`, default bind) live in `packages/acpw/src/acpw/adapters.py`. Override `stdio_argv` on a registry entry when the machine uses a different binary; see [../assets/registry.example.json](../assets/registry.example.json) for the entry shape.

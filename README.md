@@ -2,7 +2,7 @@
 
 Resident [ACP](https://agentclientprotocol.com) workers for host-agent dispatch.
 
-The **host** agent plans and verifies. **Workers** (Grok, Claude Code, Codex, Cursor) execute over a loopback WebSocket. This repository ships the skill that teaches agents the workflow, plus the `acpw` CLI that implements it.
+The **host** agent plans and verifies. **Workers** (Grok, Claude Code, Codex, Cursor) execute over a WebSocket on this machine. This repository ships the skill that teaches agents the workflow, plus the `acpw` CLI that implements it.
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
@@ -17,6 +17,7 @@ Dispatch a scoped coding task to a resident ACP worker and verify the result you
 - Handing a self-contained coding task to grok / claude / codex / cursor in the background
 - Listing, starting, or stopping resident workers (`acpw ls` / `up` / `down`)
 - Registering an already-running `grok agent serve` as a worker
+- Driving several stdio workers concurrently over one connection (`acpw pool`)
 
 **Not for:** grok TUI consultation or debate, MCP server setup, `grok -p`, or treating a worker's self-report as verification.
 
@@ -78,6 +79,23 @@ Start a grok worker in this repo and hand it the failing test in /tmp/task.txt
 acpw ls && acpw up grok --cwd "$PWD" && acpw run grok -f /tmp/task.txt
 ```
 
+One worker, one port. For several stdio workers at once there is the pool: a single
+daemon on `48190` holding the children, so one connection drives all of them.
+
+```bash
+acpw pool up --worker claude --worker cursor
+acpw run claude -f /tmp/a.txt &   # both go through 48190
+acpw run cursor -f /tmp/b.txt &
+```
+
+`acpw run` picks the pool on its own when the daemon is live and the target is a stdio
+worker; `--pool` / `--no-pool` override it. Grok is native `serve` and always keeps its
+own port. Details in [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md).
+
+Workers bind `0.0.0.0` by default and clients dial loopback. They run always-approve and
+the server key travels in cleartext, so do not expose these ports to a network you do not
+trust — `acpw selfcheck` warns about exactly this.
+
 ## Repository Structure
 
 ```
@@ -88,10 +106,12 @@ skills/
     README.md         # human-facing skill docs
     metadata.json     # version, abstract, references
     scripts/          # ensure-acpw.sh, the CLI bootstrap
-    references/       # install, wire protocol
+    references/       # install, wire protocol, pool
     assets/           # example registry file
 packages/
   acpw/               # the CLI: pyproject, src/acpw, tests
+docs/
+  pool-protocol.md    # daemon wire contract, for people changing the daemon
 skills.sh.json        # skills.sh grouping manifest
 CHANGELOG.md          # one version line for both artifacts
 ```

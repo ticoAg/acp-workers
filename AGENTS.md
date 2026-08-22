@@ -18,6 +18,7 @@ skills/{skill-name}/     # kebab-case; one directory per skill
   references/            # loaded on demand, one level deep from SKILL.md
   assets/                # example data files
 packages/{package}/      # code, tests, and lockfile
+docs/                    # contracts for people changing the code, not skill payload
 skills.sh.json           # skills.sh grouping manifest
 .github/workflows/       # CI
 ```
@@ -39,6 +40,9 @@ skills.sh.json           # skills.sh grouping manifest
 - Adapter defaults (binary, `stdio_argv`, default bind) live in `src/acpw/adapters.py`.
 - The package must not resolve paths relative to the repository; `references/` and `assets/` are skill payload, not runtime data.
 - Adding or renaming a command means updating the command table in `SKILL.md` too.
+- The pool daemon answers to [`docs/pool-protocol.md`](docs/pool-protocol.md). Change one and change the other in the same commit; the daemon is the only thing a host talks to, and a host cannot see which child it reached.
+- Ids never cross: host ids, child ids, and session ids are three separate spaces the daemon translates between. Children choose their own session ids and two of them can pick the same string, so nothing may key a table on a child-supplied id.
+- Tests must not touch a real registry. Set `ACPW_CONFIG_DIR` and `ACPW_STATE_DIR`, and take ports from `free_port()` rather than the defaults.
 
 ## Releasing
 
