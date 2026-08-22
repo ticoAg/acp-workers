@@ -36,6 +36,29 @@ acpw install
 
 Registry/state locations and the uninstall order live in [`skills/acp-workers/references/install.md`](skills/acp-workers/references/install.md).
 
+### Have an agent install it
+
+Paste this to any coding agent with shell access:
+
+```
+Install the acp-workers skill and its CLI, then verify:
+
+1. `npx skills add ticoAg/acp-workers --skill acp-workers`
+2. `bash .agents/skills/acp-workers/scripts/ensure-acpw.sh --completion`
+   (if your harness installs skills elsewhere, use that path)
+3. Both commands print one JSON line. The bootstrap is idempotent and
+   version-aware: `already` means it was current, `installed` / `updated`
+   mean it acted. On `"ok": false`, do what `notes` says — do not invent
+   another install method, and do not pip install anything.
+4. The bootstrap runs `acpw selfcheck` for you; `"selfcheck": "pass"` is
+   what you want. Run `acpw selfcheck` again yourself if you want the full
+   report. An `exposure` warning is expected — workers bind 0.0.0.0 by
+   design. Anything in `failed` is not.
+5. Read `.agents/skills/acp-workers/SKILL.md` before dispatching work.
+
+Report the two JSON lines back verbatim. Do not claim success without them.
+```
+
 ## Updating
 
 ```bash
