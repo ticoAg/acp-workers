@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import os
 import socket
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 from acpw.cli import app
+from acpw.paths import registry_path
 from acpw.pool import _init_params, _open_mux, pool_url
 
 runner = CliRunner()
@@ -140,6 +142,32 @@ def test_session_ids_do_not_cross_connections(tmp_path: Path, monkeypatch) -> No
         finally:
             owner.close()
             intruder.close()
+    finally:
+        runner.invoke(app, ["pool", "down"])
+
+
+def test_child_request_reaches_the_host_and_the_answer_gets_home(
+    tmp_path: Path, monkeypatch
+) -> None:
+    isolate(tmp_path, monkeypatch)
+    register("asker")
+    agent = Path(__file__).parent / "agents" / "perm_agent.py"
+    registry_file = registry_path()
+    registry = json.loads(registry_file.read_text())
+    registry["workers"]["asker"]["stdio_argv"] = [sys.executable, str(agent), "asker"]
+    registry_file.write_text(json.dumps(registry))
+
+    bind = os.environ["ACPW_POOL_BIND"]
+    up = runner.invoke(app, ["pool", "up", "--bind", bind])
+    assert up.exit_code == 0, up.output
+
+    try:
+        ran = runner.invoke(app, ["run", "asker", "-p", "please", "--cwd", str(tmp_path)])
+        assert ran.exit_code == 0, ran.output
+        text = json.loads(ran.output)["text"]
+        # The child got a real answer back under its own id 4242, not a timeout or an error.
+        assert '"optionId": "allow-once"' in text, text
+        assert '"outcome": "selected"' in text, text
     finally:
         runner.invoke(app, ["pool", "down"])
 
