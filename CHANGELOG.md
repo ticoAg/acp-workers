@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-22
+
+### Changed
+
+- Native mode is one WebSocket. `acpw up` starts the pool daemon; `acpw up grok claude` pre-warms those children; `acpw down NAME` stops one child; `acpw down` stops the daemon. `--no-pool` is the standalone gateway / `grok agent serve` escape hatch.
+- `acpw ls` reports a `pool` object and each worker's `via` (`pool` or `gateway`).
+- `acpw selfcheck` roundtrip goes through the shared WebSocket.
+
+### Added
+
+- `acpw down NAME` on a live pool calls `worker/down` and leaves the daemon and `sessions.json` in place.
+
+### Fixed
+
+- Client WebSocket pongs and close frames are now masked. Grok `agent serve` drops unmasked client frames (`UnmaskedFrameFromClient`) and then reports `child grok exited`, so `acpw ping` / `acpw run grok --no-pool` could not finish a prompt.
+- The pool daemon and its children no longer inherit `GROK_AGENT` / `GROK_SESSION_ID` from a host Grok process.
+
 ## [0.5.0] - 2026-08-22
 
 ### Changed
@@ -69,7 +86,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `acp-workers` skill: dispatch workflow, wire protocol reference, install reference, example registry.
 - `scripts/ensure-acpw.sh`: idempotent CLI bootstrap with a version floor, `--update`, `--force`, and `--completion`.
 
-[Unreleased]: https://github.com/ticoAg/acp-workers/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ticoAg/acp-workers/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/ticoAg/acp-workers/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/ticoAg/acp-workers/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/ticoAg/acp-workers/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ticoAg/acp-workers/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ticoAg/acp-workers/compare/v0.1.1...v0.2.0

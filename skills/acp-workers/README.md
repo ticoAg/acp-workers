@@ -1,8 +1,8 @@
 # acp-workers
 
-Dispatch coding work to resident ACP workers on this machine, and keep verification with the host agent.
+Dispatch coding work over one resident WebSocket that owns many agent processes, and keep verification with the host agent.
 
-Workers with a stdio command share one resident pool daemon. Grok in the pool is `grok agent stdio`; `acpw up grok` still starts native `serve`. Claude, Codex, and Cursor are stdio-only. The host talks to one address and gets one JSON line back.
+`acpw up` starts that socket. `acpw run NAME` opens or resumes a session and returns a `session_id`. Grok, Claude, Codex, and Cursor are children on the same daemon. `--no-pool` is the standalone gateway / `grok agent serve` escape hatch.
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
@@ -39,8 +39,8 @@ The skill and the CLI carry the same version number. `acpw version` prints what 
 ## Requirements
 
 - Python 3.12+ and uv; `~/.local/bin` on `PATH`
-- One or more agent binaries: `grok` (native), `npx` (Claude Code / Codex adapters), `cursor-agent`
-- Ports 48191–48194 free, plus 48190 for the pool, or a custom `bind` per worker
+- One or more agent binaries: `grok`, `npx` (Claude Code / Codex adapters), `cursor-agent`
+- Port `48190` free for the shared WebSocket, or a custom `ACPW_POOL_BIND`
 
 ## Use
 
@@ -49,18 +49,21 @@ acpw selfcheck            # verify the install end to end, mock round trip inclu
 acpw doctor && acpw ls
 acpw up grok --cwd "$PWD"
 acpw run grok -f /tmp/task.txt
+acpw run grok -f /tmp/next.txt --session-id <session_id>
+acpw down
 ```
 
-The pool starts on first `run` / `ping`. `--session-id` continues a conversation across invocations. A second grok process is `acpw add grok-b --kind grok`.
+`acpw run` / `acpw ping` start the socket if needed. A second grok process is `acpw add grok-b --kind grok`.
 
 ```bash
-acpw run claude -f /tmp/task.txt      # starts the pool if needed
-acpw ping cursor                      # reaches the cursor child, not the daemon
-acpw pool up --worker claude --worker cursor
-acpw pool ls && acpw pool down
+acpw up
+acpw run claude -f /tmp/task.txt
+acpw run cursor -f /tmp/other.txt &
+acpw down claude
+acpw down
 ```
 
-`--no-pool` uses that worker's own gateway; `--pool` forces the pool. Grok is never pooled. `--url` names one socket and also bypasses the pool.
+`--no-pool` uses that worker's own gateway; `--url` names one socket and also bypasses the pool.
 
 `ok` means the ACP turn ended, not that the task is correct. Read the diff and run the tests before accepting anything.
 
@@ -74,7 +77,7 @@ Workers bind `0.0.0.0` and run always-approve, with the server key in cleartext.
 | [scripts/ensure-acpw.sh](./scripts/ensure-acpw.sh) | Idempotent CLI bootstrap; one JSON line on stdout |
 | [references/install.md](./references/install.md) | Install, registry/state paths, uninstall order |
 | [references/protocol.md](./references/protocol.md) | URL scheme, ACP handshake, stdio bridge, what Grok inherits |
-| [references/pool.md](./references/pool.md) | Default pool path, session durability, ownership, error codes |
+| [references/pool.md](./references/pool.md) | Native WebSocket, session durability, ownership, error codes |
 | [assets/registry.example.json](./assets/registry.example.json) | Registry file shape |
 
 ## License

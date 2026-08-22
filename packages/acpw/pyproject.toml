@@ -1,7 +1,7 @@
 [project]
 name = "acpw"
-version = "0.5.0"
-description = "Resident ACP WebSocket workers. Host agents plan; workers execute."
+version = "0.6.0"
+description = "One WebSocket, many ACP agents. Host agents plan; workers execute."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"

@@ -10,8 +10,9 @@ from acpw import __version__
 from acpw.adapters import ADAPTERS
 from acpw.install import COMPLETION_DIR
 from acpw.paths import PACKAGE_DIR, registry_path, state_dir
+from acpw.pool import pool_down, pool_run, pool_up
 from acpw.registry import load_registry
-from acpw.service import add, doctor, rm, run, start, stop
+from acpw.service import add, doctor, rm
 from acpw.types import (
     CheckItem,
     CheckLevel,
@@ -138,15 +139,16 @@ def check_exposure() -> CheckItem:
 
 
 def check_roundtrip() -> CheckItem:
-    """Start a throwaway mock worker, dispatch one prompt, and read the answer back."""
+    """Start the shared WebSocket, dispatch one prompt through a mock child, read it back."""
     name = f"selfcheck-{os.getpid()}"
-    bind = f"127.0.0.1:{free_port()}"
     started = False
     try:
-        add(WorkerCreateParams(name=name, kind="mock", bind=bind))
-        start(name, cwd=os.getcwd(), timeout=30)
+        add(WorkerCreateParams(name=name, kind="mock", bind=f"127.0.0.1:{free_port()}"))
+        pool_up(workers=[name], cwd=os.getcwd(), timeout=30)
         started = True
-        result = run(ExecParams(name=name, prompt=ROUNDTRIP_PROMPT, cwd=os.getcwd(), timeout=60))
+        result = pool_run(
+            ExecParams(name=name, prompt=ROUNDTRIP_PROMPT, cwd=os.getcwd(), timeout=60)
+        )
         expected = f"pong:{ROUNDTRIP_PROMPT}"
         if result.text != expected:
             return CheckItem(
@@ -157,13 +159,14 @@ def check_roundtrip() -> CheckItem:
         return CheckItem(
             name="roundtrip",
             level=CheckLevel.ok,
-            detail=f"mock worker on {bind} answered, stop_reason={result.stop_reason}",
+            detail=f"pool session {result.session_id} answered, stop_reason={result.stop_reason}",
         )
     except Exception as exc:  # noqa: BLE001 - the failure itself is the finding
         return CheckItem(name="roundtrip", level=CheckLevel.fail, detail=str(exc))
     finally:
         if started:
-            stop(name)
+            with contextlib.suppress(Exception):
+                pool_down()
         with contextlib.suppress(Exception):  # cleanup must not mask the result
             rm(name)
 

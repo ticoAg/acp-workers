@@ -33,7 +33,7 @@ acpw selfcheck --no-live  # 只查静态项，不起进程
 | `completion` | warn：没注册补全，跑 `acpw install` |
 | `adapters` | 一个 agent 二进制都没有；缺一部分只是 warn |
 | `exposure` | 只会 warn，不会 fail：列出绑在非回环地址的 worker。默认就是 `0.0.0.0`，所以装完看到它是正常的 |
-| `roundtrip` | 起一个临时 mock worker、派一条 prompt、比对回包。这一项过了才说明链路真的通 |
+| `roundtrip` | 起共享 WebSocket、派一条 prompt 给临时 mock child、比对回包。这一项过了才说明链路真的通 |
 
 `roundtrip` 用随机空闲端口，worker 名带进程号，跑完即停并从 registry 里删掉，不会碰你已有的 worker。
 
@@ -44,7 +44,7 @@ acpw selfcheck --no-live  # 只查静态项，不起进程
 skill 和 CLI 同版本号发布。三处必须一致：`packages/acpw/pyproject.toml`、`skills/acp-workers/metadata.json`、`SKILL.md` frontmatter 里的 `metadata.version`；CI 会卡这一点。
 
 ```bash
-acpw version   # {"ok":true,"version":"0.4.0","python":"3.12.14","location":"…"}
+acpw version   # {"ok":true,"version":"0.6.0","python":"3.12.14","location":"…"}
 acpw --version # 同上
 ```
 
@@ -96,8 +96,8 @@ registry 不需要手写，`acpw add` / `acpw up` 会维护。示例文件只用
 顺序固定：先停 worker，再卸 CLI 与补全，最后卸 skill。
 
 ```bash
-acpw pool down          # 起过 pool 的话先停，它会连带收掉名下所有 child
-acpw down grok          # 每个 live worker 停一次
+acpw down               # 停共享 WebSocket，连带收掉名下所有 child
+acpw down grok --no-pool  # 若起过独立 gateway / serve，再逐个停
 acpw uninstall          # 补全文件 + ~/.bashrc 标记
 acpw uninstall --purge  # 上一项 + 停全部已登记 worker + 删 config 与 state 目录
 uv tool uninstall acpw

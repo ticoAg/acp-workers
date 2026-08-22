@@ -40,7 +40,7 @@ skills.sh.json           # skills.sh grouping manifest
 - Adapter defaults (binary, `stdio_argv`, default bind) live in `src/acpw/adapters.py`.
 - The package must not resolve paths relative to the repository; `references/` and `assets/` are skill payload, not runtime data.
 - Adding or renaming a command means updating the command table in `SKILL.md` too.
-- `acpw run` / `acpw ping` start the pool daemon for stdio workers when none is live. `acpw pool up` pre-warms; `--no-pool` keeps a per-worker gateway. Native serve (grok) and `--url` never go through the pool.
+- Native mode is one WebSocket: `acpw up` starts the pool daemon, `acpw up NAME…` pre-warms children, `acpw down NAME` stops one child, `acpw down` stops the daemon. `acpw run` / `acpw ping` start that daemon when none is live. `--no-pool` is the standalone gateway / serve escape hatch; `--url` also bypasses the pool.
 - The pool daemon answers to [`docs/pool-protocol.md`](docs/pool-protocol.md). Change one and change the other in the same commit; the daemon is the only thing a host talks to, and a host cannot see which child it reached.
 - Ids never cross: host ids, child ids, and session ids are three separate spaces the daemon translates between. Children choose their own session ids and two of them can pick the same string, so nothing may key a table on a child-supplied id.
 - Tests must not touch a real registry. Set `ACPW_CONFIG_DIR` and `ACPW_STATE_DIR`, and take ports from `free_port()` rather than the defaults.

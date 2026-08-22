@@ -24,6 +24,7 @@ from acpw.types import (
     PoolStopResponse,
     PoolWorker,
     ToolCallOut,
+    WorkerStopResponse,
 )
 from acpw.ws import connect_host, split_bind, ws_connect, ws_url
 
@@ -289,6 +290,25 @@ def _prewarm(url: str, workers: list[str], cwd: str | None, timeout: float) -> N
             client.rpc("worker/up", params, timeout=per)
     finally:
         client.close()
+
+
+def pool_stop_worker(name: str) -> WorkerStopResponse:
+    """Kill one pooled child. The daemon stays up; durable sessions stay on disk."""
+    if not pool_live():
+        return WorkerStopResponse(name=name, signaled=[], live=False)
+    before = next((row for row in pool_status().workers if row.name == name), None)
+    client = _open_mux(pool_url())
+    try:
+        client.rpc("initialize", _init_params(), timeout=20)
+        client.rpc("worker/down", {"name": name}, timeout=30)
+    finally:
+        client.close()
+    after = next((row for row in pool_status().workers if row.name == name), None)
+    return WorkerStopResponse(
+        name=name,
+        signaled=[before.pid] if before and before.pid else [],
+        live=bool(after and after.alive),
+    )
 
 
 def pool_down() -> PoolStopResponse:

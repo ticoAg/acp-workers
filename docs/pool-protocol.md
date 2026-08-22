@@ -4,7 +4,7 @@ Contract between `acpw daemon` (server) and `MuxClient` (client). Both sides are
 
 ## Why
 
-Today one worker means one `acpw gateway` process, one port, one secret, and one in-flight request (`conn_lock` plus `child.lock` serialize everything). The pool replaces that with a single resident daemon on one port that owns several stdio children, so one host connection can drive several agents concurrently.
+This is the native mode of the project: one resident daemon on one port that owns several stdio children, so one host connection can drive several agents concurrently and resume them by public session id. The standalone `acpw gateway` (one worker, one port, one secret, one in-flight request) remains as `--no-pool`.
 
 ## Endpoint
 

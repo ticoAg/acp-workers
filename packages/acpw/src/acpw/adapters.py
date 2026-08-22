@@ -9,9 +9,9 @@ ADAPTERS: dict[str, Adapter] = {
         default_bind="0.0.0.0:48191",
         binary="grok",
         # Same shape acpx uses (`grok agent stdio`). --no-leader keeps each child its
-        # own backend; --always-approve matches `acpw up grok`.
+        # own backend; --always-approve matches `acpw up grok` / `--no-pool`.
         stdio_argv=["grok", "agent", "--always-approve", "--no-leader", "stdio"],
-        notes="Native serve on its own port; stdio child under the pool.",
+        notes="Stdio child on the shared WebSocket; `acpw up grok --no-pool` still starts serve.",
     ),
     "claude": Adapter(
         kind="claude",

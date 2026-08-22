@@ -43,13 +43,17 @@ from acpw.types import (
     WorkerStatusList,
     WorkerStopResponse,
 )
-from acpw.ws import ws_connect, ws_url
+from acpw.ws import ws_close, ws_connect, ws_url
 
 LIVE = {ProbeVia.health, ProbeVia.ws_401, ProbeVia.ws_auth}
 
 
 def status() -> WorkerStatusList:
+    from acpw.pool import pool_status
+
     spec_map = ADAPTERS
+    pool = pool_status()
+    pooled = {row.name: row for row in pool.workers} if pool.live else {}
     rows: list[WorkerStatus] = []
     for name, entry in load_registry().workers.items():
         kind = entry.kind or name
@@ -58,7 +62,9 @@ def status() -> WorkerStatusList:
         bind = bind_of(entry, spec) if spec else entry.bind
         secret = secret_for(name, entry)
         live = probe(bind, secret) if bind else None
-        pid = read_pid(worker_state_dir(name) / "pid")
+        child = pooled.get(name)
+        in_pool = bool(child and child.alive)
+        pid = child.pid if in_pool else read_pid(worker_state_dir(name) / "pid")
         rows.append(
             WorkerStatus(
                 name=name,
@@ -66,11 +72,12 @@ def status() -> WorkerStatusList:
                 enabled=entry.enabled,
                 transport=transport,
                 bind=bind,
-                live=bool(live and live.live),
-                probe=live.via.value if live and live.via else None,
+                live=in_pool or bool(live and live.live),
+                probe="pool" if in_pool else (live.via.value if live and live.via else None),
                 pid=pid,
                 url=ws_url(bind, None) if bind else entry.url,
                 manual_url=bool(entry.url),
+                via="pool" if in_pool else ("gateway" if live and live.live else None),
             )
         )
     return WorkerStatusList(
@@ -78,6 +85,7 @@ def status() -> WorkerStatusList:
         workers=rows,
         listening_defaults=scan_listening(),
         processes=process_map(),
+        pool=pool,
     )
 
 
@@ -125,6 +133,8 @@ def spawn_daemon(argv: list[str], log_path: Path, env: dict[str, str] | None = N
         merged.update(env)
         if "PYTHONPATH" not in env:
             merged["PYTHONPATH"] = src + os.pathsep + merged.get("PYTHONPATH", "")
+    for key in ("GROK_AGENT", "GROK_SESSION_ID"):
+        merged.pop(key, None)
     proc = subprocess.Popen(
         argv,
         stdin=subprocess.DEVNULL,
@@ -330,7 +340,7 @@ def ping(name: str) -> PingResponse:
             agent_info=init.get("agentInfo") or init.get("serverInfo"),
         )
     finally:
-        sock.close()
+        ws_close(sock, client=True)
 
 
 def run(params: ExecParams) -> ExecResponse:
@@ -395,4 +405,4 @@ def run(params: ExecParams) -> ExecResponse:
             tool_calls=tools,
         )
     finally:
-        sock.close()
+        ws_close(sock, client=True)

@@ -14,7 +14,15 @@ from acpw.daemon import run_daemon
 from acpw.gateway import run_gateway
 from acpw.install import install_shell, uninstall_shell
 from acpw.paths import DEFAULT_POOL_BIND, PACKAGE_DIR
-from acpw.pool import pool_down, pool_live, pool_ping, pool_run, pool_status, pool_up
+from acpw.pool import (
+    pool_down,
+    pool_live,
+    pool_ping,
+    pool_run,
+    pool_status,
+    pool_stop_worker,
+    pool_up,
+)
 from acpw.registry import AcpwError, load_registry
 from acpw.selfcheck import run_selfcheck
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
@@ -27,7 +35,7 @@ from acpw.types import (
 
 app = typer.Typer(
     name="acpw",
-    help="Resident ACP workers. Host plans; workers execute.",
+    help="One WebSocket, many agents. Host plans; workers execute.",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
     add_completion=True,
@@ -103,7 +111,7 @@ def main(
         ),
     ] = False,
 ) -> None:
-    """Resident ACP workers. Host plans; workers execute."""
+    """One WebSocket, many agents. Host plans; workers execute."""
 
 
 @app.command("version")
@@ -116,7 +124,7 @@ def cmd_version() -> None:
 @app.command("status", hidden=True)
 @app.command("discover", hidden=True)
 def cmd_ls() -> None:
-    """List workers and live ACP servers."""
+    """List workers and the shared WebSocket."""
     emit(status())
 
 
@@ -164,22 +172,67 @@ def cmd_rm(name: str) -> None:
 @app.command("up")
 @app.command("start", hidden=True)
 def cmd_up(
-    name: str,
+    names: Annotated[
+        list[str] | None,
+        typer.Argument(help="Workers to pre-warm on the pool. Omit to start the socket only."),
+    ] = None,
     cwd: Annotated[Path | None, typer.Option()] = None,
     timeout: Annotated[float, typer.Option()] = 45,
+    pool: Annotated[
+        bool,
+        typer.Option(
+            "--pool/--no-pool",
+            help="Default: the shared WebSocket. --no-pool starts a standalone gateway/serve.",
+        ),
+    ] = True,
 ) -> None:
-    """Start a worker if it is not live."""
+    """Start the shared WebSocket, optionally pre-warming workers."""
     try:
-        emit(start(name, cwd=str(cwd) if cwd else None, timeout=timeout))
+        if pool:
+            emit(
+                pool_up(
+                    workers=list(names) if names else None,
+                    cwd=str(cwd) if cwd else None,
+                    timeout=timeout,
+                )
+            )
+            return
+        if not names:
+            emit(ErrorResponse(error="--no-pool needs a worker name"), code=1)
+        for name in names:
+            emit(start(name, cwd=str(cwd) if cwd else None, timeout=timeout))
     except Exception as exc:
         fail(exc)
 
 
 @app.command("down")
 @app.command("stop", hidden=True)
-def cmd_down(name: str) -> None:
-    """Stop a worker started by acpw."""
-    emit(stop(name))
+def cmd_down(
+    name: Annotated[
+        str | None,
+        typer.Argument(help="One pooled child. Omit to stop the shared WebSocket."),
+    ] = None,
+    pool: Annotated[
+        bool,
+        typer.Option(
+            "--pool/--no-pool",
+            help="Default: the shared WebSocket. --no-pool stops a standalone gateway/serve.",
+        ),
+    ] = True,
+) -> None:
+    """Stop the shared WebSocket, or one child on it."""
+    try:
+        if not pool:
+            if not name:
+                emit(ErrorResponse(error="--no-pool needs a worker name"), code=1)
+            emit(stop(name))
+            return
+        if name is None:
+            emit(pool_down())
+            return
+        emit(pool_stop_worker(name))
+    except Exception as exc:
+        fail(exc)
 
 
 @app.command("ping")
@@ -187,7 +240,7 @@ def cmd_ping(
     name: str,
     pool: Annotated[
         bool | None,
-        typer.Option("--pool/--no-pool", help="Default: the pool, for stdio workers."),
+        typer.Option("--pool/--no-pool", help="Default: the shared WebSocket, for stdio workers."),
     ] = None,
 ) -> None:
     """ACP initialize against a live worker."""
@@ -210,10 +263,10 @@ def cmd_run(
     timeout: Annotated[float, typer.Option()] = 600,
     pool: Annotated[
         bool | None,
-        typer.Option("--pool/--no-pool", help="Default: the pool, for stdio workers."),
+        typer.Option("--pool/--no-pool", help="Default: the shared WebSocket, for stdio workers."),
     ] = None,
 ) -> None:
-    """Dispatch a prompt to a worker."""
+    """Dispatch a prompt. Returns a session_id; pass --session-id to resume."""
     text = prompt
     if prompt_file:
         text = prompt_file.read_text(encoding="utf-8")
@@ -297,7 +350,7 @@ def cmd_daemon(
     secret_file: Annotated[Path, typer.Option()],
     bind: Annotated[str, typer.Option()] = DEFAULT_POOL_BIND,
 ) -> None:
-    """Internal multiplexing daemon. Started by `acpw pool up`."""
+    """Internal multiplexing daemon. Started by `acpw up`."""
     run_daemon(bind, str(secret_file))
 
 
@@ -309,5 +362,5 @@ def cmd_gateway(
     stdio_json: Annotated[str, typer.Option()],
     cwd: Annotated[str, typer.Option()],
 ) -> None:
-    """Internal stdio-to-websocket bridge. Started by `acpw up`."""
+    """Internal stdio-to-websocket bridge. Started by `acpw up --no-pool`."""
     run_gateway(name, bind, str(secret_file), json.loads(stdio_json), cwd)

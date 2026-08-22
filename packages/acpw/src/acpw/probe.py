@@ -9,7 +9,7 @@ from pathlib import Path
 
 from acpw.adapters import ADAPTERS, PROCESS_NEEDLES
 from acpw.types import ListeningHit, ProbeResult, ProbeVia
-from acpw.ws import connect_host, split_bind, ws_connect, ws_url
+from acpw.ws import connect_host, split_bind, ws_close, ws_connect, ws_url
 
 
 def http_get(url: str, timeout: float = 1.5) -> tuple[int, str]:
@@ -46,7 +46,7 @@ def probe(bind: str, secret: str | None = None) -> ProbeResult:
     if secret:
         try:
             conn = ws_connect(ws_url(bind, secret), timeout=3)
-            conn.close()
+            ws_close(conn, client=True)
             return ProbeResult(live=True, bind=bind, via=ProbeVia.ws_auth)
         except OSError:
             pass

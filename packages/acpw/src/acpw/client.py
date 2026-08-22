@@ -6,7 +6,7 @@ import threading
 import time
 from typing import Any
 
-from acpw.ws import ws_recv, ws_send
+from acpw.ws import ws_close, ws_recv, ws_send
 
 
 class AcpClient:
@@ -30,7 +30,7 @@ class AcpClient:
         while time.time() < deadline:
             left = max(0.1, deadline - time.time())
             self.sock.settimeout(left)
-            raw = ws_recv(self.sock)
+            raw = ws_recv(self.sock, client=True)
             if raw is None:
                 raise ConnectionError("ACP connection closed")
             if not raw:
@@ -107,14 +107,7 @@ class MuxClient:
     def close(self) -> None:
         with self._lock:
             self._closed = True
-        try:
-            self.sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        try:
-            self.sock.close()
-        except OSError:
-            pass
+        ws_close(self.sock, client=True)
         thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=2.0)
@@ -217,7 +210,7 @@ class MuxClient:
         try:
             while True:
                 try:
-                    raw = ws_recv(self.sock)
+                    raw = ws_recv(self.sock, client=True)
                 except (OSError, TimeoutError, ValueError):
                     break
                 if raw is None:

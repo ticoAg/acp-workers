@@ -9,13 +9,13 @@ acpw install
 acpw doctor && acpw ls
 acpw up grok --cwd "$PWD"
 acpw run grok -f /tmp/task.txt
+acpw run grok -f /tmp/next.txt --session-id <session_id>
+acpw down
 ```
 
 Every command prints one JSON line. `ok` means the ACP turn ended, not that the task is correct.
 
-`acpw run grok` goes through the pool as `grok agent --always-approve --no-leader stdio`. `acpw up grok` / `--no-pool` still start native `serve`. Claude, Codex, and Cursor are stdio-only and use the same pool.
-
-`acpw pool up` runs one daemon on `48190` that owns those children, so a single connection drives several of them concurrently. `acpw run` and `acpw ping` take that path by default whenever a worker has a stdio command, and start the daemon if none is live. `--session-id` continues a pooled conversation across separate invocations. The wire contract is in [`docs/pool-protocol.md`](../../docs/pool-protocol.md).
+Native mode is one WebSocket on `48190` that owns many agent processes. `acpw up` starts it; `acpw run NAME` opens or resumes a session; `acpw down NAME` stops one child; `acpw down` stops the socket. Grok in the pool is `grok agent --always-approve --no-leader stdio`. `--no-pool` is the standalone gateway / `grok agent serve` escape hatch. The wire contract is in [`docs/pool-protocol.md`](../../docs/pool-protocol.md).
 
 The agent-facing instructions ship alongside this package as the `acp-workers` skill: see [`skills/acp-workers/`](../../skills/acp-workers/) in the repository, or install it with `npx skills add ticoAg/acp-workers --skill acp-workers`.
 

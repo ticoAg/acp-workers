@@ -155,12 +155,18 @@ class PooledChild:
         # Distinguishes two generations of the same worker, so a restart cannot inherit
         # the session ids of the process it replaced.
         self.token = next(_child_tokens)
+        env = os.environ.copy()
+        # Host grok exports these so nested `acpw run grok` would otherwise inherit
+        # the parent's session and exit (`child grok exited`).
+        for key in ("GROK_AGENT", "GROK_SESSION_ID"):
+            env.pop(key, None)
         self.proc = subprocess.Popen(
             argv,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=cwd,
+            env=env,
             bufsize=0,
         )
         assert self.proc.stdin and self.proc.stdout and self.proc.stderr

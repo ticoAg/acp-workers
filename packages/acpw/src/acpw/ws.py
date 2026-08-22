@@ -40,9 +40,9 @@ def ws_accept(key: str) -> str:
     return base64.b64encode(digest).decode()
 
 
-def ws_send(sock: socket.socket, text: str, *, client: bool) -> None:
-    data = text.encode("utf-8")
-    header = bytearray([0x81])
+def ws_frame(opcode: int, data: bytes, *, client: bool) -> bytes:
+    """RFC 6455 frame. Clients must mask; servers must not. Grok drops unmasked client frames."""
+    header = bytearray([0x80 | (opcode & 0x0F)])
     ln = len(data)
     mask_bit = 0x80 if client else 0
     if ln < 126:
@@ -57,7 +57,26 @@ def ws_send(sock: socket.socket, text: str, *, client: bool) -> None:
         mask = os.urandom(4)
         header.extend(mask)
         data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
-    sock.sendall(header + data)
+    return bytes(header) + data
+
+
+def ws_send(sock: socket.socket, text: str, *, client: bool) -> None:
+    sock.sendall(ws_frame(0x1, text.encode("utf-8"), client=client))
+
+
+def ws_close(sock: socket.socket, *, client: bool = True) -> None:
+    try:
+        sock.sendall(ws_frame(0x8, b"", client=client))
+    except OSError:
+        pass
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
 
 
 def _recvn(sock: socket.socket, n: int) -> bytes | None:
@@ -73,7 +92,7 @@ def _recvn(sock: socket.socket, n: int) -> bytes | None:
     return bytes(buf)
 
 
-def ws_recv(sock: socket.socket) -> str | None:
+def ws_recv(sock: socket.socket, *, client: bool = False) -> str | None:
     hdr = _recvn(sock, 2)
     if hdr is None:
         return None
@@ -99,8 +118,11 @@ def ws_recv(sock: socket.socket) -> str | None:
     if opcode == 0x8:
         return None
     if opcode == 0x9:
-        sock.sendall(b"\x8a" + bytes([len(data)]) + data)
-        return ws_recv(sock)
+        try:
+            sock.sendall(ws_frame(0xA, data, client=client))
+        except OSError:
+            return None
+        return ws_recv(sock, client=client)
     if opcode == 0x1:
         return data.decode("utf-8")
     return ""

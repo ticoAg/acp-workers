@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+from acpw.types.pool import PoolStatus
 from acpw.types.probe import ListeningHit, ProbeResult
 from acpw.types.shared import TransportKind
 
@@ -15,6 +16,7 @@ class WorkerStatus(BaseModel):
     pid: int | None
     url: str | None
     manual_url: bool
+    via: str | None = None
 
 
 class WorkerStatusList(BaseModel):
@@ -23,6 +25,7 @@ class WorkerStatusList(BaseModel):
     workers: list[WorkerStatus]
     listening_defaults: list[ListeningHit]
     processes: dict[str, list[int]]
+    pool: PoolStatus | None = None
 
 
 class WorkerStartResponse(BaseModel):
