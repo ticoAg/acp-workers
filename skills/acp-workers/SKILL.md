@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Python 3.12+ and uv. CLI name is acpw."
 metadata:
   author: ticoAg
-  version: "0.1.1"
+  version: "0.2.0"
 ---
 
 # ACP Workers
@@ -30,7 +30,9 @@ Host agent 只做规划、派发、验收；执行面是本机常驻的 ACP WebS
 bash scripts/ensure-acpw.sh
 ```
 
-幂等，且带版本闸门：已装且版本够就报 `already`，没装或低于脚本里的 `required_version` 就装/升到位并报 `installed` / `updated`。想主动追最新版加 `--update`。返回 `"ok":false` 时按 `notes` 处理（通常是缺 uv，或 `~/.local/bin` 不在 PATH），不要自己另想装法。补全另说，要就加 `--completion`（会写 `~/.bashrc`）。细节见 [references/install.md](references/install.md)。
+幂等，且带版本闸门：已装且版本够就报 `already`，没装或低于脚本里的 `required_version` 就装/升到位并报 `installed` / `updated`。装完自动跑 `acpw selfcheck`，结果落在 `selfcheck` 字段（`pass` / `fail` / `skipped`）。想主动追最新版加 `--update`，跳过自检加 `--no-selfcheck`。
+
+`"ok":false` 时按 `notes` 处理，不要自己另想装法：缺 uv、`~/.local/bin` 不在 PATH，或自检没过（完整报告在 stderr）。补全要单独加 `--completion`（会写 `~/.bashrc`）。细节见 [references/install.md](references/install.md)。
 
 ## Roles
 
@@ -81,6 +83,7 @@ acpw run grok -f /tmp/task.txt
 | 命令 | 作用 |
 | --- | --- |
 | `version` | 打印已装版本、Python、包路径（也可 `acpw --version`） |
+| `selfcheck` | 八项自检 + mock 往返；有 `fail` 则退出 1（`--no-live` 只查静态项） |
 | `ls` | 配置 + 探活 + 进程（别名 `status`） |
 | `doctor` | 检查适配器二进制是否在 PATH |
 | `up` / `down` | 后台起停（别名 `start` / `stop`） |
@@ -90,6 +93,7 @@ acpw run grok -f /tmp/task.txt
 
 ## Validation
 
+- [ ] `acpw selfcheck` 的 `failed` 为空（装完自动跑过一次）
 - [ ] `acpw ls` 里目标 worker `live` 为真
 - [ ] `acpw run` 返回的 `stop_reason` 不是 `cancelled`
 - [ ] Host 自己看过 diff

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from acpw.adapters import ADAPTERS
 from acpw.io import load_json, save_json
-from acpw.paths import OLD_DEFAULT_PORTS, REGISTRY_PATH, worker_state_dir
+from acpw.paths import OLD_DEFAULT_PORTS, registry_path, worker_state_dir
 from acpw.types import Adapter, ErrorResponse, Registry, TransportKind, Worker, WorkerCreateParams
 from acpw.ws import split_bind
 
@@ -27,10 +27,10 @@ def default_registry() -> Registry:
 
 
 def load_registry() -> Registry:
-    raw = load_json(REGISTRY_PATH, None)
+    raw = load_json(registry_path(), None)
     if raw is None:
         data = default_registry()
-        save_json(REGISTRY_PATH, data)
+        save_json(registry_path(), data)
         return data
     data = Registry.model_validate(raw)
     changed = False
@@ -41,12 +41,12 @@ def load_registry() -> Registry:
             worker.bind = spec.default_bind
             changed = True
     if changed:
-        save_json(REGISTRY_PATH, data)
+        save_json(registry_path(), data)
     return data
 
 
 def save_registry(data: Registry) -> None:
-    save_json(REGISTRY_PATH, data)
+    save_json(registry_path(), data)
 
 
 def resolve_worker(name: str) -> tuple[Worker, Adapter]:

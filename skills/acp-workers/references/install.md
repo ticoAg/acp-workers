@@ -5,13 +5,36 @@ Skill 和 CLI 是两件东西。Skill 让各 agent 扫到 `SKILL.md`；CLI 提�
 装完 skill 之后，CLI 交给随 skill 一起下发的脚本：
 
 ```bash
-bash scripts/ensure-acpw.sh              # 幂等；够新就报 already，偏旧自动升级
-bash scripts/ensure-acpw.sh --update     # 主动重装到源里的最新版
-bash scripts/ensure-acpw.sh --completion # 顺带注册 bash 补全（写 ~/.bashrc）
-bash scripts/ensure-acpw.sh --force      # 无条件重装
+bash scripts/ensure-acpw.sh                 # 幂等；够新就报 already，偏旧自动升级，末尾自动自检
+bash scripts/ensure-acpw.sh --update        # 主动重装到源里的最新版
+bash scripts/ensure-acpw.sh --completion    # 顺带注册 bash 补全（写 ~/.bashrc）
+bash scripts/ensure-acpw.sh --force         # 无条件重装
+bash scripts/ensure-acpw.sh --no-selfcheck  # 跳过自检
 ```
 
 脚本在 checkout 里会优先用同仓库的 `packages/acpw`，只装了 skill 时回落到 GitHub。stdout 恒为一行 JSON，进度在 stderr。下面是它替你做的事，手动装时照做。
+
+## 自检
+
+`ensure-acpw.sh` 装完会自动跑一次；也可以随时手动跑。
+
+```bash
+acpw selfcheck            # 八项，含 mock 往返；任一 fail 退出 1
+acpw selfcheck --no-live  # 只查静态项，不起进程
+```
+
+| 检查 | fail 的含义 |
+| --- | --- |
+| `cli` | 包元数据缺失，acpw 是从源码树 import 的，没真正安装 |
+| `path` | warn：`acpw` 不在 PATH |
+| `uv` | warn：没有 uv，后续升级会失败 |
+| `registry` | `registry.json` 读不了或解析不了 |
+| `state` | state 目录不可写 |
+| `completion` | warn：没注册补全，跑 `acpw install` |
+| `adapters` | 一个 agent 二进制都没有；缺一部分只是 warn |
+| `roundtrip` | 起一个临时 mock worker、派一条 prompt、比对回包。这一项过了才说明链路真的通 |
+
+`roundtrip` 用随机空闲端口，worker 名带进程号，跑完即停并从 registry 里删掉，不会碰你已有的 worker。
 
 ## 版本
 

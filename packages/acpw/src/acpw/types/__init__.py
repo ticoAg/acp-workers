@@ -10,6 +10,7 @@ from acpw.types.registry import (
     WorkerDeleted,
     WorkerRegistered,
 )
+from acpw.types.selfcheck import CheckItem, CheckLevel, SelfCheckResponse
 from acpw.types.session import ExecParams, ExecResponse, PingResponse, ToolCallOut
 from acpw.types.shared import ProbeVia, TransportKind
 from acpw.types.version import VersionResponse
@@ -22,6 +23,8 @@ from acpw.types.worker import (
 
 __all__ = [
     "Adapter",
+    "CheckItem",
+    "CheckLevel",
     "DoctorAdapter",
     "DoctorResponse",
     "ErrorResponse",
@@ -33,6 +36,7 @@ __all__ = [
     "ProbeResult",
     "ProbeVia",
     "Registry",
+    "SelfCheckResponse",
     "ToolCallOut",
     "TransportKind",
     "UninstallResponse",

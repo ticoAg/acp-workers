@@ -13,6 +13,7 @@ from acpw.gateway import run_gateway
 from acpw.install import install_shell, uninstall_shell
 from acpw.paths import PACKAGE_DIR
 from acpw.registry import AcpwError
+from acpw.selfcheck import run_selfcheck
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
 from acpw.types import ErrorResponse, ExecParams, VersionResponse, WorkerCreateParams
 
@@ -85,6 +86,18 @@ def cmd_ls() -> None:
 def cmd_doctor() -> None:
     """Check adapter binaries on PATH."""
     emit(doctor())
+
+
+@app.command("selfcheck")
+def cmd_selfcheck(
+    live: Annotated[
+        bool,
+        typer.Option("--live/--no-live", help="Dispatch to a throwaway mock worker."),
+    ] = True,
+) -> None:
+    """Verify the installation end to end. Exits 1 if any check fails."""
+    result = run_selfcheck(live=live)
+    emit(result, code=0 if result.ok else 1)
 
 
 @app.command("add")

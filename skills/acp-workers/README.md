@@ -45,6 +45,7 @@ The skill and the CLI carry the same version number. `acpw version` prints what 
 ## Use
 
 ```bash
+acpw selfcheck            # verify the install end to end, mock round trip included
 acpw doctor && acpw ls
 acpw up grok --cwd "$PWD"
 acpw run grok -f /tmp/task.txt

@@ -11,7 +11,7 @@ from pathlib import Path
 from acpw import __version__
 from acpw.adapters import ADAPTERS
 from acpw.client import AcpClient
-from acpw.paths import PACKAGE_DIR, REGISTRY_PATH, worker_state_dir
+from acpw.paths import PACKAGE_DIR, registry_path, worker_state_dir
 from acpw.probe import probe, process_map, scan_listening
 from acpw.registry import (
     AcpwError,
@@ -74,7 +74,7 @@ def status() -> WorkerStatusList:
             )
         )
     return WorkerStatusList(
-        registry=str(REGISTRY_PATH),
+        registry=str(registry_path()),
         workers=rows,
         listening_defaults=scan_listening(),
         processes=process_map(),

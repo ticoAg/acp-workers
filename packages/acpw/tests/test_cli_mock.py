@@ -22,6 +22,25 @@ def test_version_matches_package_metadata() -> None:
         assert body["version"] != "0+unknown"
 
 
+def test_selfcheck_roundtrip(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ACPW_CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setenv("ACPW_STATE_DIR", str(tmp_path / "state"))
+    os.chdir(tmp_path)
+
+    result = runner.invoke(app, ["selfcheck"])
+    body = json.loads(result.output)
+    names = {item["name"]: item for item in body["checks"]}
+    assert names["roundtrip"]["level"] == "ok", body
+    assert names["cli"]["level"] == "ok", body
+    assert body["failed"] == [], body
+    assert result.exit_code == 0, result.output
+
+    skipped = runner.invoke(app, ["selfcheck", "--no-live"])
+    assert skipped.exit_code == 0, skipped.output
+    body = json.loads(skipped.output)
+    assert "roundtrip" in body["warned"]
+
+
 def test_mock_lifecycle(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ACPW_CONFIG_DIR", str(tmp_path / "cfg"))
     monkeypatch.setenv("ACPW_STATE_DIR", str(tmp_path / "state"))

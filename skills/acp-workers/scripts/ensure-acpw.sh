@@ -9,16 +9,19 @@ required_version="0.1.0"
 force=0
 update=0
 completion=0
+selfcheck=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --force) force=1 ;;
     --update) update=1 ;;
     --completion) completion=1 ;;
+    --no-selfcheck) selfcheck=0 ;;
     -h|--help)
-      echo "usage: ensure-acpw.sh [--update] [--force] [--completion]" >&2
-      echo "  --update      reinstall from source to pick up the latest release" >&2
-      echo "  --force       reinstall even if the installed version is current" >&2
-      echo "  --completion  also run 'acpw install' (writes ~/.bashrc)" >&2
+      echo "usage: ensure-acpw.sh [--update] [--force] [--completion] [--no-selfcheck]" >&2
+      echo "  --update         reinstall from source to pick up the latest release" >&2
+      echo "  --force          reinstall even if the installed version is current" >&2
+      echo "  --completion     also run 'acpw install' (writes ~/.bashrc)" >&2
+      echo "  --no-selfcheck   skip the post-install 'acpw selfcheck'" >&2
       echo "requires acpw >= $required_version" >&2
       exit 0
       ;;
@@ -44,6 +47,20 @@ older_than() { # older_than WHAT FLOOR
   [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ]
 }
 
+selfcheck_state="skipped"
+
+run_selfcheck() {
+  [ "$selfcheck" -eq 1 ] || return 0
+  local report
+  if report=$(acpw selfcheck 2>/dev/null); then
+    selfcheck_state="pass"
+  else
+    selfcheck_state="fail"
+    notes+=("acpw selfcheck failed; full report on stderr")
+    echo "$report" >&2
+  fi
+}
+
 emit() {
   local ok="$1" action="$2" source="$3"
   local joined=""
@@ -51,9 +68,10 @@ emit() {
     joined=$(printf '"%s",' "${notes[@]}")
     joined="${joined%,}"
   fi
-  printf '{"ok":%s,"action":"%s","version":"%s","required":"%s","acpw":"%s","source":"%s","completion":%s,"notes":[%s]}\n' \
+  [ "$selfcheck_state" = "fail" ] && ok=false
+  printf '{"ok":%s,"action":"%s","version":"%s","required":"%s","acpw":"%s","source":"%s","completion":%s,"selfcheck":"%s","notes":[%s]}\n' \
     "$ok" "$action" "$(installed_version)" "$required_version" "$(command -v acpw || true)" "$source" \
-    "$([ "$completion" -eq 1 ] && echo true || echo false)" "$joined"
+    "$([ "$completion" -eq 1 ] && echo true || echo false)" "$selfcheck_state" "$joined"
 }
 
 run_completion() {
@@ -64,7 +82,9 @@ run_completion() {
 current="$(installed_version)"
 if [ -n "$current" ] && [ "$force" -eq 0 ] && [ "$update" -eq 0 ] && ! older_than "$current" "$required_version"; then
   run_completion
+  run_selfcheck
   emit true already existing
+  if [ "$selfcheck_state" = "fail" ]; then exit 1; fi
   exit 0
 fi
 
@@ -107,8 +127,10 @@ if older_than "$new" "$required_version"; then
 fi
 
 run_completion
+run_selfcheck
 if [ -n "$current" ]; then
   emit true updated "$source_spec"
 else
   emit true installed "$source_spec"
 fi
+if [ "$selfcheck_state" = "fail" ]; then exit 1; fi

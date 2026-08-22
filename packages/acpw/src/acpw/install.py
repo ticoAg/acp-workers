@@ -84,13 +84,13 @@ def uninstall_shell(*, purge: bool = False) -> UninstallResponse:
             bashrc_updated = True
     purged = False
     if purge:
-        from acpw.paths import CONFIG_DIR, STATE_DIR
+        from acpw.paths import config_dir, state_dir
         from acpw.registry import load_registry
         from acpw.service import stop
 
         for name in list(load_registry().workers):
             stop(name)
-        for path in (CONFIG_DIR, STATE_DIR):
+        for path in (config_dir(), state_dir()):
             if path.exists():
                 shutil.rmtree(path)
         purged = True
