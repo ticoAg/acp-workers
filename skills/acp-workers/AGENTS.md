@@ -16,7 +16,7 @@ Do not use it for grok TUI consultation or debate, MCP server configuration, `gr
 
 1. Read [SKILL.md](./SKILL.md).
 2. `bash scripts/ensure-acpw.sh`, then `acpw doctor && acpw ls`. For grok / `--no-pool`, only dispatch to a worker that is `live`. For stdio workers, `acpw ping NAME` (or `acpw run`) starts the pool if needed.
-3. Start or register a native serve worker with `acpw up` / `acpw add`. Stdio workers go through the pool by default — `acpw run` starts the daemon if none is live. `acpw pool up` pre-warms children; `--no-pool` keeps a per-worker gateway. See [references/pool.md](./references/pool.md).
+3. `acpw run NAME` starts the pool if needed. Grok in the pool is `grok agent stdio`; `acpw up grok` / `--no-pool` still start native serve. A second grok process is `acpw add grok-b --kind grok`. See [references/pool.md](./references/pool.md).
 4. Write one acceptance-shaped task, dispatch with `acpw run`.
 5. Verify yourself: read the diff, run the tests. A worker's report is not evidence.
 

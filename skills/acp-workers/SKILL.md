@@ -1,18 +1,18 @@
 ---
 name: acp-workers
-description: "Dispatch coding work to resident ACP workers over a local WebSocket via the acpw CLI (Grok native serve; Claude/Codex/Cursor stdio bridged). Host agent plans, scopes, and verifies; workers execute. USE FOR: acpw ls/up/run, acpw ping, acpw pool, --pool/--no-pool, --session-id, 48190, 并发派发, grok agent serve, ACP websocket, 常驻 ACP, 派发给 grok/claude/codex/cursor, 服务发现. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
+description: "Dispatch coding work to resident ACP workers over a local WebSocket via the acpw CLI (Grok/Claude/Codex/Cursor; pool multiplexes stdio children including grok agent stdio). Host agent plans, scopes, and verifies; workers execute. USE FOR: acpw ls/up/run, acpw ping, acpw pool, --pool/--no-pool, --session-id, 48190, 并发派发, grok agent stdio, grok agent serve, ACP websocket, 常驻 ACP, 派发给 grok/claude/codex/cursor, 服务发现. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
 license: MIT
 compatibility: "Requires Python 3.12+ and uv. CLI name is acpw."
 metadata:
   author: ticoAg
-  version: "0.4.0"
+  version: "0.5.0"
 ---
 
 # ACP Workers
 
 Host agent 只做规划、派发、验收；执行面是本机常驻的 ACP WebSocket worker。所有操作走 `acpw`，每条命令输出一行 JSON。
 
-stdio worker（claude / codex / cursor / mock，凡 `stdio_bridge`）默认走 pool daemon（端口 `48190`，一把 secret）：`acpw run` / `acpw ping` 在 daemon 没起来时会自己起一份，不必先 `acpw pool up`。`pool up` 用来预热 child。`--no-pool` 改走该 worker 自己的 gateway，`--pool` 强制走 pool。grok 是 native serve，永远走自己的 `48191`；显式 `--url` 也绕开 pool。见 [references/pool.md](references/pool.md)。
+凡带 stdio 命令的 worker（claude / codex / cursor / grok / mock）默认走 pool daemon（端口 `48190`，一把 secret）：`acpw run` / `acpw ping` 在 daemon 没起来时会自己起一份，不必先 `acpw pool up`。grok 在 pool 里是 `grok agent --always-approve --no-leader stdio`，和 claude 一样是一个 child。`--no-pool` 才走它自己的 `grok agent serve`（`48191`）。显式 `--url` 绕开 pool。见 [references/pool.md](references/pool.md)。
 
 ## When to Use
 
@@ -43,9 +43,9 @@ bash scripts/ensure-acpw.sh
 | --- | --- |
 | Host | 当前主 agent。拆任务、选 worker、自己跑测试 |
 | Worker | `ws://127.0.0.1:PORT/ws?server-key=SECRET` |
-| Native | Grok：`grok agent serve` |
-| Bridge | Claude / Codex / Cursor：stdio ACP 桥到同一 URL |
-| Pool | 一个 daemon 挂多个 stdio child，入口 `ws://127.0.0.1:48190/ws?server-key=SECRET` |
+| Native | `acpw up grok`：`grok agent serve`，一口独立端口 |
+| Bridge | Claude / Codex / Cursor：stdio ACP 桥到独立 gateway |
+| Pool | 一个 daemon 挂多个 stdio child（含 grok），入口 `ws://127.0.0.1:48190/ws?server-key=SECRET` |
 
 默认端口（高位）：grok `48191`，claude `48192`，codex `48193`，cursor `48194`，pool `48190`。默认监听 `0.0.0.0`，连接一律用 `127.0.0.1`。worker 是 always-approve 且 secret 明文过线，别把这些端口暴露到不可信网络——`acpw selfcheck` 会就此告警。
 
@@ -77,7 +77,7 @@ acpw pool up --worker claude --worker cursor                 # 可选预热；st
 acpw run grok -f /tmp/task.txt
 ```
 
-续同一会话加 `--session-id`（pool 上跨两次 `acpw run` 可用：id 长 `acpw-s` 加 16 位 hex，连接断了、child 死了、daemon 重启后都能再贴上去）。能否把**对话历史**找回来，取决于 agent 是否广告并执行 `session/load`。stdio worker 默认走 pool，daemon 不在就由本命令拉起；`--pool` / `--no-pool` 可覆盖。grok 是 native serve，永远走自己的 `48191`。默认超时 600s，可用 `--timeout` 调。
+续同一会话加 `--session-id`（pool 上跨两次 `acpw run` 可用：id 长 `acpw-s` 加 16 位 hex，连接断了、child 死了、daemon 重启后都能再贴上去）。能否把**对话历史**找回来，取决于 agent 是否广告并执行 `session/load`。默认走 pool，daemon 不在就由本命令拉起；`--pool` / `--no-pool` 可覆盖。要 grok 的独立 serve 用 `--no-pool`。第二个 grok 进程：`acpw add grok-b --kind grok`，再 `acpw run grok-b`。默认超时 600s，可用 `--timeout` 调。
 
 ### Step 5: 验收
 

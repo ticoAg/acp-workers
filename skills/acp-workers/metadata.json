@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "organization": "ticoAg",
   "date": "August 2026",
-  "abstract": "Dispatches coding work to resident ACP workers over a WebSocket through the acpw CLI. Grok runs natively via grok agent serve. Claude Code, Codex, and Cursor are bridged from stdio ACP; acpw run and acpw ping send those workers through a pool daemon by default, starting the daemon if none is live. A public --session-id continues a pooled conversation across connections, child respawns, and daemon restarts when the agent advertises loadSession. The host agent keeps planning, scoping, and verification; workers only execute. Every command prints one JSON line, and an ok result means the ACP turn ended, not that the task is correct.",
+  "abstract": "Dispatches coding work to resident ACP workers over a WebSocket through the acpw CLI. Workers with a stdio command — Claude, Codex, Cursor, and Grok — go through one pool daemon by default. Grok in the pool is grok agent stdio; acpw up grok still starts native serve. A public --session-id continues a pooled conversation across connections, child respawns, and daemon restarts when the agent advertises loadSession. The host agent keeps planning, scoping, and verification; workers only execute. Every command prints one JSON line, and an ok result means the ACP turn ended, not that the task is correct.",
   "references": [
     "https://agentclientprotocol.com",
     "https://agentskills.io/specification",

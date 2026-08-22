@@ -9,7 +9,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from acpw.cli import app
+from acpw.adapters import ADAPTERS, resolve_stdio_argv
+from acpw.cli import app, poolable
 from acpw.paths import registry_path
 from acpw.pool import _init_params, _open_mux, pool_url
 
@@ -195,3 +196,30 @@ def test_run_prefers_pool_and_no_pool_opts_out(tmp_path: Path, monkeypatch) -> N
         assert json.loads(opted_out.output)["ok"] is False
     finally:
         runner.invoke(app, ["pool", "down"])
+
+
+def test_grok_is_poolable_and_spawns_stdio(tmp_path: Path, monkeypatch) -> None:
+    isolate(tmp_path, monkeypatch)
+    listed = runner.invoke(app, ["ls"])
+    assert listed.exit_code == 0, listed.output
+    assert poolable("grok") is True
+    spec = ADAPTERS["grok"]
+    assert resolve_stdio_argv(None, spec) == [
+        "grok",
+        "agent",
+        "--always-approve",
+        "--no-leader",
+        "stdio",
+    ]
+
+    # Kind stays grok (native serve still exists); the pool child is a mock so this
+    # test does not need a real grok login.
+    registry_file = registry_path()
+    registry = json.loads(registry_file.read_text())
+    registry["workers"]["grok"]["stdio_argv"] = [sys.executable, "-m", "acpw.agents.echo"]
+    registry_file.write_text(json.dumps(registry))
+
+    ran = runner.invoke(app, ["run", "grok", "-p", "from-pool", "--cwd", str(tmp_path)])
+    assert ran.exit_code == 0, ran.output
+    assert json.loads(ran.output)["text"] == "pong:from-pool"
+    runner.invoke(app, ["pool", "down"])

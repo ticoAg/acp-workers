@@ -2,11 +2,11 @@
 
 Pool 是监听 `0.0.0.0:48190` 的一个常驻 daemon：一把 secret，底下同时挂着若干 stdio 子进程。Host 只连这一条 WebSocket（拨 `127.0.0.1`），就可以并发驱动多个 agent。
 
-`acpw run NAME` / `acpw ping NAME` 对 stdio worker（claude、codex、cursor、mock，以及任何 transport 为 `stdio_bridge` 的条目）**默认走 pool**。daemon 没在跑时，命令自己起一份。不必先 `acpw pool up`；`pool up` 用来预热 child。`--no-pool` 改走该 worker 自己的 gateway；`--pool` 强制走 pool。native serve（grok）永远走自己的入口；显式 `--url` 也绕开 pool，因为它指名某个 socket。
+`acpw run NAME` / `acpw ping NAME` 对**有 stdio 命令**的 worker（claude、codex、cursor、grok、mock）**默认走 pool**。判定看的是 `stdio_argv`，不是 transport 种类——grok 仍然是 `native_ws`（`acpw up grok` 起 `serve`），但 adapter 同时带了 `grok agent --always-approve --no-leader stdio`，所以 pool 也能拉它。daemon 没在跑时，命令自己起一份。不必先 `acpw pool up`；`pool up` 用来预热 child。`--no-pool` 改走该 worker 自己的 gateway / serve；`--pool` 强制走 pool。显式 `--url` 绕开 pool，因为它指名某个 socket。
 
 它**不**省启动时间。Claude / Codex / Cursor 的 stdio 子进程以前就由 `acpw gateway` 常驻着——一 worker 一口端口一把密钥，而且一次只接一个 WebSocket、一次只做一条 in-flight 请求。Pool 把这些 child 收进同一个进程。换来的是一个入口、一把密钥、一条连接上的并发派发，以及下面三档 session 耐久，不是少等进程起来。
 
-独立 gateway 还在。Grok 仍是 `grok agent serve`（`48191`），不走 stdio 桥。
+独立 gateway / serve 还在。一个 registry 名对应 pool 里**一个** child；要两个 grok 进程就再登记一个同 kind：`acpw add grok-b --kind grok`。`--no-pool` 的 grok 仍是 `grok agent serve`（`48191`）。
 
 ## 何时用
 
@@ -14,7 +14,7 @@ Pool 是监听 `0.0.0.0:48190` 的一个常驻 daemon：一把 secret，底下�
 | --- | --- |
 | 一条长连接上同时跟几个 agent 说话 | 要隔离 blast radius：一个挂了别的还在 |
 | 只想记 `48190` 和一把 secret | 要按端口、按 `<name>/server.log` 追查 |
-| 多个 `acpw run` 同时打过来（stdio 的默认路径） | 派 grok（native serve，本来就不进 pool），或调试单个 worker |
+| 多个 `acpw run` 同时打过来（含 grok stdio） | 调试单个独立 gateway / serve，或要隔离 blast radius |
 
 Pool 是单点故障：daemon 一挂，名下 child 全停。public session 映射写在 `_pool/sessions.json`，daemon 再起后同一 `--session-id` 仍可续。今天 grok `48191`、claude `48192`、codex `48193`、cursor `48194` 各是各的进程。要隔离进程就 `acpw up NAME`，`run` 加 `--no-pool`。
 
@@ -46,14 +46,17 @@ GET /health
 | `acpw run NAME --no-pool` | 强制走该 worker 自己的 gateway / serve |
 | `acpw ping NAME` | 默认走 pool 时会 spawn/initialize 目标 child，回报它的 `agentInfo` / `protocolVersion`，不是 daemon 自己的身份 |
 
-`acpw run NAME` / `acpw ping NAME` 默认：NAME 是 stdio worker 就走 pool，daemon 不在就先起；否则走原来的 per-worker 端口。grok 是 native serve，不在 pool 的管辖内——不写 `--no-pool` 也不会被路由进去；写了 `--pool` 会被直接拒掉（`worker grok runs its own server and cannot be pooled; drop --pool`），不会等到 daemon 那边报个看不懂的 spawn 错误。`--pool` 同样会在 daemon 不在时把它拉起来。`--url` 指名道姓某个 socket，同样绕开 pool。`pool up` 起的是空 daemon，某个 worker 第一次 `session/new` 才 spawn 对应 child；`--worker NAME` 可重复，用来预热。
+`acpw run NAME` / `acpw ping NAME` 默认：NAME 有 stdio 命令就走 pool，daemon 不在就先起；否则走原来的 per-worker 端口。`--url` 指名道姓某个 socket，绕开 pool。`pool up` 起的是空 daemon，某个 worker 第一次 `session/new` 才 spawn 对应 child；`--worker NAME` 可重复，用来预热。
 
 ```bash
 acpw run claude -f /tmp/task.txt                 # 默认走 pool；daemon 不在就拉起
 acpw ping cursor                                 # 探到的是 cursor child，不是 daemon
 acpw pool up --worker claude --worker cursor     # 预热，不是必做
 acpw run cursor -f /tmp/other.txt --pool
-acpw run grok -f /tmp/task.txt                   # grok 仍走 48191，无需 --no-pool
+acpw run grok -f /tmp/task.txt                   # pool 拉起 grok agent stdio
+acpw add grok-b --kind grok                      # 第二个 grok 进程
+acpw run grok-b -f /tmp/other.txt
+acpw run grok -f /tmp/task.txt --no-pool         # 独立 serve，48191
 acpw run claude -f /tmp/task.txt --no-pool       # 该 worker 自己的 gateway
 acpw pool down
 ```

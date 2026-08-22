@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-22
+
+### Changed
+
+- Grok joins the pool. The predicate is "has a stdio command", not `transport == stdio_bridge`. `acpw run grok` now starts `grok agent --always-approve --no-leader stdio` under the daemon, the same launch acpx uses for `grok-build`. `acpw up grok` and `--no-pool` still start native `serve` on `48191`. A second grok process is another registry name of `kind: grok`.
+
 ## [0.4.0] - 2026-08-22
 
 ### Changed

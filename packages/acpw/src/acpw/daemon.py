@@ -23,11 +23,11 @@ from pathlib import Path
 from typing import Any
 
 from acpw import __version__
-from acpw.adapters import ADAPTERS
+from acpw.adapters import ADAPTERS, resolve_stdio_argv
 from acpw.paths import POOL_STATE_NAME, worker_state_dir
 from acpw.registry import AcpwError, load_registry, resolve_worker
 from acpw.service import expand_stdio
-from acpw.types import PoolWorker, TransportKind
+from acpw.types import PoolWorker
 from acpw.ws import dumps, split_bind, ws_accept, ws_recv, ws_send
 
 ERR_ROUTE = -32602
@@ -428,11 +428,9 @@ class Pool:
             raise RouteError(ERR_ROUTE, f"worker {name} is disabled in registry")
         kind = entry.kind or name
         adapter = ADAPTERS.get(kind, spec)
-        if adapter.transport != TransportKind.stdio_bridge:
-            raise RouteError(ERR_ROUTE, f"worker {name} is not a stdio worker")
-        argv = expand_stdio(list(entry.stdio_argv or adapter.stdio_argv))
+        argv = expand_stdio(resolve_stdio_argv(entry.stdio_argv, adapter))
         if not argv:
-            raise RouteError(ERR_ROUTE, f"worker {name} missing stdio_argv")
+            raise RouteError(ERR_ROUTE, f"worker {name} is not a stdio worker")
         workdir = cwd or os.getcwd()
         try:
             child = PooledChild(name, kind, argv, workdir, self)

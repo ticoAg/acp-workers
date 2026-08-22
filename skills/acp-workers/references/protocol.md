@@ -37,9 +37,9 @@ It does **not** inherit Cursor Auto-run. Deny rules still win over always-approv
 
 ## Stdio bridge
 
-Claude / Codex / Cursor have no Grok-style `serve`. `acpw gateway` keeps one stdio ACP child and one in-flight WebSocket client. `initialize`/`authenticate` results are cached so the next `ping`/`run` does not re-handshake the child.
+Claude / Codex / Cursor have no Grok-style `serve`. Grok has both: `grok agent serve` (`acpw up grok` / `--no-pool`) and `grok agent --always-approve --no-leader stdio` (the pool child, same argv shape as acpx's `grok-build`). `acpw gateway` keeps one stdio ACP child and one in-flight WebSocket client. `initialize`/`authenticate` results are cached so the next `ping`/`run` does not re-handshake the child.
 
-One client at a time is the limit that `acpw pool` lifts: the same children move under one daemon that serves many connections and many concurrent requests. See [pool.md](pool.md).
+One client at a time is the limit that `acpw pool` lifts: the same children move under one daemon that serves many connections and many concurrent requests. A worker is poolable when it has a `stdio_argv`, regardless of its standalone transport. See [pool.md](pool.md).
 
 Default binds: grok `0.0.0.0:48191`, claude `48192`, codex `48193`, cursor `48194`, pool `48190`. The listen address is `0.0.0.0`; clients dial `127.0.0.1`.
 

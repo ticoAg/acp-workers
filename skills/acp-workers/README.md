@@ -2,9 +2,7 @@
 
 Dispatch coding work to resident ACP workers on this machine, and keep verification with the host agent.
 
-Grok runs natively through `grok agent serve`. Claude Code, Codex, and Cursor speak stdio ACP and are bridged onto the same WebSocket URL by `acpw gateway`. Either way the host talks to one address and gets one JSON line back.
-
-The stdio workers share one resident pool daemon by default (`acpw run` / `acpw ping` start it if none is live), so a host drives several of them concurrently over a single connection instead of one port per worker. `acpw pool up` pre-warms children. Grok stays on its own `grok agent serve` gateway.
+Workers with a stdio command share one resident pool daemon. Grok in the pool is `grok agent stdio`; `acpw up grok` still starts native `serve`. Claude, Codex, and Cursor are stdio-only. The host talks to one address and gets one JSON line back.
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
@@ -53,7 +51,7 @@ acpw up grok --cwd "$PWD"
 acpw run grok -f /tmp/task.txt
 ```
 
-Stdio workers go through the pool by default. The daemon starts on first `run` / `ping`; `acpw pool up` is optional pre-warm. `--session-id` continues a pooled conversation across invocations.
+The pool starts on first `run` / `ping`. `--session-id` continues a conversation across invocations. A second grok process is `acpw add grok-b --kind grok`.
 
 ```bash
 acpw run claude -f /tmp/task.txt      # starts the pool if needed

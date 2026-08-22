@@ -79,20 +79,20 @@ Start a grok worker in this repo and hand it the failing test in /tmp/task.txt
 acpw ls && acpw up grok --cwd "$PWD" && acpw run grok -f /tmp/task.txt
 ```
 
-One worker, one port. Stdio workers (claude, cursor, codex, mock) go through the
-pool by default: a single daemon on `48190` holding the children, so one
-connection drives all of them. `acpw run` / `acpw ping` start that daemon if
-none is live. `acpw pool up` pre-warms children.
+One worker, one port. Workers that have a stdio command (claude, cursor, codex,
+grok, mock) go through the pool by default: a single daemon on `48190` holding
+the children, so one connection drives all of them. Grok in the pool is
+`grok agent stdio`. `acpw run` / `acpw ping` start that daemon if none is live.
 
 ```bash
-acpw run claude -f /tmp/a.txt &
-acpw run cursor -f /tmp/b.txt &
+acpw run grok -f /tmp/a.txt &
+acpw run claude -f /tmp/b.txt &
+acpw add grok-b --kind grok && acpw run grok-b -f /tmp/c.txt &
 ```
 
-`--no-pool` uses a per-worker gateway; `--pool` forces the pool. Grok is native
-`serve` and always keeps its own port. An explicit `--url` also bypasses the
-pool. `--session-id` continues a pooled conversation across separate `acpw run`
-invocations. Details in [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md).
+`--no-pool` uses a per-worker gateway or `grok agent serve`. `--session-id`
+continues a pooled conversation across separate `acpw run` invocations. Details
+in [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md).
 
 Workers bind `0.0.0.0` by default and clients dial loopback. They run always-approve and
 the server key travels in cleartext, so do not expose these ports to a network you do not

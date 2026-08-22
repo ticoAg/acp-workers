@@ -8,7 +8,10 @@ ADAPTERS: dict[str, Adapter] = {
         transport=TransportKind.native_ws,
         default_bind="0.0.0.0:48191",
         binary="grok",
-        notes="Native ACP WebSocket via grok agent serve.",
+        # Same shape acpx uses (`grok agent stdio`). --no-leader keeps each child its
+        # own backend; --always-approve matches `acpw up grok`.
+        stdio_argv=["grok", "agent", "--always-approve", "--no-leader", "stdio"],
+        notes="Native serve on its own port; stdio child under the pool.",
     ),
     "claude": Adapter(
         kind="claude",
@@ -43,6 +46,16 @@ ADAPTERS: dict[str, Adapter] = {
         notes="In-package echo agent for tests.",
     ),
 }
+
+
+def resolve_stdio_argv(entry_argv: list[str] | None, spec: Adapter | None) -> list[str]:
+    """The command the pool (or a gateway) would spawn. Empty means not poolable."""
+    if entry_argv:
+        return list(entry_argv)
+    if spec and spec.stdio_argv:
+        return list(spec.stdio_argv)
+    return []
+
 
 PROCESS_NEEDLES = {
     "grok": "agent serve",

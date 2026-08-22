@@ -9,7 +9,7 @@ import typer
 from pydantic import BaseModel
 
 from acpw import __version__
-from acpw.adapters import ADAPTERS
+from acpw.adapters import ADAPTERS, resolve_stdio_argv
 from acpw.daemon import run_daemon
 from acpw.gateway import run_gateway
 from acpw.install import install_shell, uninstall_shell
@@ -21,7 +21,6 @@ from acpw.service import add, doctor, ping, rm, run, start, status, stop
 from acpw.types import (
     ErrorResponse,
     ExecParams,
-    TransportKind,
     VersionResponse,
     WorkerCreateParams,
 )
@@ -48,10 +47,10 @@ def fail(exc: Exception) -> None:
 
 
 def poolable(name: str) -> bool:
-    """The daemon owns stdio children. A native serve worker like grok is its own process."""
+    """The daemon can own any worker that has a stdio command, including grok."""
     entry = load_registry().workers.get(name)
     spec = ADAPTERS.get((entry.kind if entry else None) or name)
-    return spec is not None and spec.transport is TransportKind.stdio_bridge
+    return bool(resolve_stdio_argv(entry.stdio_argv if entry else None, spec))
 
 
 def use_pool(name: str, *, url: str | None, choice: bool | None) -> bool:
@@ -68,7 +67,7 @@ def use_pool(name: str, *, url: str | None, choice: bool | None) -> bool:
         # letting it fail later as an opaque spawn error.
         raise AcpwError(
             ErrorResponse(
-                error=f"worker {name} runs its own server and cannot be pooled; drop --pool",
+                error=f"worker {name} has no stdio adapter and cannot be pooled; drop --pool",
                 name=name,
             )
         )
