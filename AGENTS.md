@@ -28,7 +28,8 @@ skills.sh.json           # skills.sh grouping manifest
 - Keep `SKILL.md` under 500 lines. Anything rare or long goes to `references/` and is linked, not inlined.
 - The description is the router: lead with the action, then `USE FOR:` triggers and `DO NOT USE FOR:` exclusions naming the sibling skill that owns them.
 - Adding a skill means adding it to `skills.sh.json` as well.
-- `npx skills add` copies the whole skill directory, so anything the skill needs at runtime must live inside it. Nothing outside `skills/<name>/` ships.
+- `npx skills add` copies the skill directory — `SKILL.md`, `AGENTS.md`, `README.md`, `references/`, `scripts/`, `assets/`, executable bits intact. `metadata.json` is consumed by the installer and does not land on disk, so nothing may depend on it at runtime. Nothing outside `skills/<name>/` ships at all.
+- Frontmatter is parsed as YAML by the installer. Quote any scalar containing `: `, or the skill is silently skipped with "No skills found".
 - Scripts: `#!/bin/bash` with `set -euo pipefail`, executable bit set, kebab-case name. Progress goes to stderr, one machine-readable JSON line to stdout. Make them idempotent — an agent may run them on every invocation.
 
 ## CLI Conventions (`packages/acpw`)
