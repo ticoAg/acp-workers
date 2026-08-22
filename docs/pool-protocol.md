@@ -71,7 +71,8 @@ Session 是一段对话，不是一条 socket。它活过打开它的那条连�
 - 每个 child 有一条 reader 线程永远排空 stdout，按 id 分发；任何地方都没有「读到我的 id 为止」。
 - 每个 child 一把写锁；每条连接一把写锁。一帧 WebSocket 和一行 stdio 各自原子写出。
 - 每个 child 可以有多条 in-flight 请求。背后的 agent 是否真并行，是 agent 自己的事；daemon 不为它串行化。
-- Child stderr 排到 daemon 日志，永不进 WebSocket。
+- Children 只在**一条长命线程**上 fork。Linux 把 `PR_SET_PDEATHSIG` 绑在父*线程*而不是父进程上：设了它的 agent（Grok 会设）在 fork 它的那条线程退出的瞬间就收到 SIGTERM。Daemon 每条请求跑在临时线程上，所以在请求线程里 fork，会让 child 在自己的 `session/new` 刚交接出去就被内核杀掉——rc=143，且 daemon 从未调用过 kill。
+- Child stderr 排到 daemon 日志，带 worker 名前缀，永不进 WebSocket。裸行无法归属到某个 worker。
 
 ## 生命周期
 

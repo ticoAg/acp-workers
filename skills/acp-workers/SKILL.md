@@ -5,7 +5,7 @@ license: MIT
 compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
-  version: "0.6.0"
+  version: "0.6.1"
 ---
 
 # ACP Workers
@@ -116,6 +116,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | 把 pool 当启动加速 | 子进程本来就常驻；换来的是一个入口和并发，不是少等进程 |
 | `--session-id` 续上了但对话是空的 | daemon 能重建 session；历史回不回得来看 agent 是否广告并执行 `session/load`。没广告会报 `worker <name> cannot resume sessions (loadSession not advertised)` |
 | `session <id> is held by another client` | 同一时刻一条连接占用一个 session；等那条连接断开后再续 |
+| 批量派发久了变慢 | 每次不带 `--session-id` 的 `run` 都新开一个 session，且**永不回收**。要么复用 `--session-id`，要么 `acpw down` 后删 `_pool/sessions.json` |
 | daemon 挂了名下 child 一起停 | session 映射留在 `_pool/sessions.json`，daemon 再起后可续。要隔离进程就 `acpw up NAME` 加 `--no-pool` |
 
 ## 参考

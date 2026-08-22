@@ -86,6 +86,8 @@ acpw down
 
 同一时刻一个 session 只给一条连接。另一条活连接正占着时，续会返回 `session <id> is held by another client`。那条连接断开后 session 卸下，可以再续。
 
+Session 只增不减：`sessions.json` 里的记录故意活过 child 和 daemon（L2、L3 正靠它），daemon 里没有回收、过期或数量上限。批量派任务时每个不带 `--session-id` 的 `acpw run` 都会新开一段对话，长期跑要么复用 id，要么 `acpw down` 后删掉 `_pool/sessions.json`。
+
 ## 路由
 
 Host 眼里 daemon 就是 ACP agent。Child 的 `initialize` 在 spawn 时由 daemon 做完，host 看不到。

@@ -7,6 +7,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from acpw.adapters import ADAPTERS, resolve_stdio_argv
@@ -223,3 +224,99 @@ def test_grok_is_poolable_and_spawns_stdio(tmp_path: Path, monkeypatch) -> None:
     assert ran.exit_code == 0, ran.output
     assert json.loads(ran.output)["text"] == "pong:from-pool"
     runner.invoke(app, ["pool", "down"])
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="PR_SET_PDEATHSIG is Linux-only")
+def test_child_outlives_the_thread_that_forked_it(tmp_path: Path, monkeypatch) -> None:
+    """The daemon serves each request on a throwaway thread, and Linux ties PR_SET_PDEATHSIG
+    to the parent *thread*. Forking children there let the kernel kill an agent the instant
+    its `session/new` was handed off: rc=143, with the daemon never calling kill.
+    """
+    isolate(tmp_path, monkeypatch)
+    register("pd")
+    registry_file = registry_path()
+    registry = json.loads(registry_file.read_text())
+    agent = Path(__file__).parent / "agents" / "pdeathsig_agent.py"
+    registry["workers"]["pd"]["stdio_argv"] = [sys.executable, str(agent)]
+    registry_file.write_text(json.dumps(registry))
+
+    try:
+        # Two prompts on one session: the second only lands if the child survived the
+        # request thread that spawned it for the first.
+        first = runner.invoke(app, ["run", "pd", "-p", "one", "--cwd", str(tmp_path)])
+        assert first.exit_code == 0, first.output
+        session = json.loads(first.output)["session_id"]
+
+        second = runner.invoke(
+            app, ["run", "pd", "-p", "two", "--cwd", str(tmp_path), "--session-id", session]
+        )
+        assert second.exit_code == 0, second.output
+        assert json.loads(second.output)["text"] == "pong:two"
+
+        status = json.loads(runner.invoke(app, ["pool", "ls"]).output)
+        child = next(worker for worker in status["workers"] if worker["name"] == "pd")
+        assert child["alive"] is True
+    finally:
+        runner.invoke(app, ["pool", "down"])
+
+
+def test_many_sessions_fan_out_across_children(tmp_path: Path, monkeypatch) -> None:
+    """Dispatching many tasks at once: every session/new gets its own public id, and
+    concurrent prompts each come back on the session that asked, across several children.
+    """
+    isolate(tmp_path, monkeypatch)
+    workers = ["w1", "w2", "w3"]
+    for name in workers:
+        register(name)
+
+    bind = os.environ["ACPW_POOL_BIND"]
+    args = ["pool", "up", "--bind", bind]
+    for name in workers:
+        args += ["--worker", name]
+    up = runner.invoke(app, args)
+    assert up.exit_code == 0, up.output
+
+    try:
+        client = _open_mux(pool_url())
+        try:
+            client.rpc("initialize", _init_params(), timeout=20)
+            tags = {}
+            for worker in workers:
+                for index in range(3):
+                    created = client.rpc(
+                        "session/new",
+                        {
+                            "cwd": str(tmp_path),
+                            "mcpServers": [],
+                            "_meta": {"worker": worker, "yoloMode": True},
+                        },
+                        timeout=60,
+                    )
+                    tags[str(created["sessionId"])] = f"{worker}-{index}"
+            # Nine sessions on three children: ids stay distinct even where two children
+            # hand the daemon the same native id.
+            assert len(tags) == 9, tags
+
+            def prompt(item: tuple[str, str]) -> dict:
+                session_id, tag = item
+                return client.rpc(
+                    "session/prompt",
+                    {"sessionId": session_id, "prompt": [{"type": "text", "text": tag}]},
+                    timeout=60,
+                )
+
+            with ThreadPoolExecutor(max_workers=9) as pool:
+                results = list(pool.map(prompt, tags.items()))
+            assert all(result["stopReason"] == "end_turn" for result in results), results
+
+            for session_id, tag in tags.items():
+                text = "".join(
+                    update["update"]["content"]["text"]
+                    for update in client.updates(session_id)
+                    if update["update"].get("sessionUpdate") == "agent_message_chunk"
+                )
+                assert text == f"pong:{tag}", (tag, text)
+        finally:
+            client.close()
+    finally:
+        runner.invoke(app, ["pool", "down"])

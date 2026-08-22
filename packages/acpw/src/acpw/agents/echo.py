@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import uuid
 
 SESSION = "mock-session"
 
@@ -45,7 +46,10 @@ def main() -> None:
         elif method == "authenticate":
             reply(msg_id, {})
         elif method == "session/new":
-            reply(msg_id, {"sessionId": SESSION})
+            # One id per session, like a real agent. A fixed id collides in the daemon's
+            # (child, native) map, so concurrent session/new would fold into a single
+            # session and fan-out would fail with `held by another client`.
+            reply(msg_id, {"sessionId": f"mock-{uuid.uuid4().hex[:12]}"})
         elif method == "session/load":
             reply(msg_id, {"sessionId": params.get("sessionId") or SESSION})
         elif method == "session/prompt":

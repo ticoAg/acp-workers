@@ -6,9 +6,17 @@
 
 ## [未发布]
 
+## [0.6.1] - 2026-08-22
+
 ### 变更
 
 - 将仓库内面向人与 agent 的文档改为中文；命令、协议字段、错误文案和链接保持原文。
+
+### 修复
+
+- Pool children 现在只在一条长命线程上 fork。Daemon 为每条请求起一条临时线程，而 Linux 把 `PR_SET_PDEATHSIG` 绑在父*线程*上，所以设了这个标志的 Grok 会在 `session/new` 刚转交出去、该线程退出的瞬间被内核 SIGTERM 杀掉。表现为 `acpw run grok` 稳定失败于 `child grok exited`，而 daemon 自己毫发无损、也从未调用 kill。
+- Child 退出日志带上 `rc=`，child stderr 带上 worker 名前缀。此前两者都无法归属，`child grok exited` 分不清是 daemon 杀的、外部信号，还是 agent 自己退的。
+- 内置 mock agent 的 `session/new` 现在每次铸一个新 session id。此前固定返回 `mock-session`，在 daemon 的 `(child, native)` 映射里会把并发开出的多个 session 折叠成同一个，扇出测试因此假失败于 `session … is held by another client`，也掩盖了真实的并发正确性。
 
 ## [0.6.0] - 2026-08-22
 
@@ -90,7 +98,8 @@
 - `acp-workers` skill：派发流程、线路协议参考、安装参考、registry 示例。
 - `scripts/ensure-acpw.sh`：幂等 CLI 引导，带版本下限、`--update`、`--force`、`--completion`。
 
-[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.0...HEAD
+[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/ticoAg/acp-workers/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ticoAg/acp-workers/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ticoAg/acp-workers/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/ticoAg/acp-workers/compare/v0.3.0...v0.4.0

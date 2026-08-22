@@ -18,6 +18,7 @@ import tempfile
 import threading
 import urllib.parse
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,14 @@ INIT_TIMEOUT = 30.0
 HANDSHAKE_TIMEOUT = 15.0
 
 Handler = Callable[[dict[str, Any]], None]
+
+# Children are forked here, never on a request thread. Linux ties PR_SET_PDEATHSIG to the
+# parent *thread*: an agent that sets it (grok does) gets SIGTERM the moment the thread that
+# forked it exits. The daemon serves each request on a throwaway thread, so forking there
+# killed every child as soon as its `session/new` was handed off. One long-lived worker
+# thread outlives every request; at interpreter exit it drains and children get the signal
+# then, which is the shutdown behaviour we want anyway.
+_SPAWNER = ThreadPoolExecutor(max_workers=1, thread_name_prefix="acpw-spawn")
 
 
 class RouteError(Exception):
@@ -160,7 +169,8 @@ class PooledChild:
         # the parent's session and exit (`child grok exited`).
         for key in ("GROK_AGENT", "GROK_SESSION_ID"):
             env.pop(key, None)
-        self.proc = subprocess.Popen(
+        self.proc = _SPAWNER.submit(
+            subprocess.Popen,
             argv,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -168,7 +178,7 @@ class PooledChild:
             cwd=cwd,
             env=env,
             bufsize=0,
-        )
+        ).result()
         assert self.proc.stdin and self.proc.stdout and self.proc.stderr
         self.write_lock = threading.Lock()
         self.state_lock = threading.Lock()
@@ -267,8 +277,11 @@ class PooledChild:
     def _read_stderr(self) -> None:
         assert self.proc.stderr
         for line in self.proc.stderr:
-            sys.stderr.buffer.write(line)
-            sys.stderr.buffer.flush()
+            text = line.decode("utf-8", "replace").rstrip()
+            if not text:
+                continue
+            # Attributed, not raw: a bare line in the log cannot be traced to a worker.
+            log(f"{self.name}/stderr: {text}")
 
     def _dispatch(self, obj: dict[str, Any]) -> None:
         msg_id = obj.get("id")
@@ -481,8 +494,8 @@ class Pool:
                 del self.children[child.name]
             dropped = self._drop_sessions(lambda session: session.child is not child)
         log(
-            f"{child.name}: child exited, {len(dropped)} in-memory session(s) cleared; "
-            "durable records kept"
+            f"{child.name}: child exited rc={child.proc.poll()}, "
+            f"{len(dropped)} in-memory session(s) cleared; durable records kept"
         )
 
     def shutdown(self) -> None:
