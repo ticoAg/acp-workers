@@ -41,6 +41,10 @@ def registry_path() -> Path:
     return config_dir() / "registry.json"
 
 
+def config_file() -> Path:
+    return config_dir() / "config.json"
+
+
 def worker_state_dir(name: str) -> Path:
     path = state_dir() / name
     path.mkdir(parents=True, exist_ok=True)

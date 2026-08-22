@@ -8,6 +8,7 @@ import tempfile
 
 from acpw import __version__
 from acpw.adapters import ADAPTERS
+from acpw.i18n import t
 from acpw.install import COMPLETION_DIR
 from acpw.paths import PACKAGE_DIR, registry_path, state_dir
 from acpw.pool import pool_down, pool_run, pool_up
@@ -37,9 +38,15 @@ def check_cli() -> CheckItem:
         return CheckItem(
             name="cli",
             level=CheckLevel.fail,
-            detail="package metadata missing; acpw is imported from a source tree, not installed",
+            detail=t(
+                "package metadata missing; acpw is imported from a source tree, not installed"
+            ),
         )
-    return CheckItem(name="cli", level=CheckLevel.ok, detail=f"acpw {__version__} at {PACKAGE_DIR}")
+    return CheckItem(
+        name="cli",
+        level=CheckLevel.ok,
+        detail=t("acpw {version} at {location}", version=__version__, location=PACKAGE_DIR),
+    )
 
 
 def check_path() -> CheckItem:
@@ -49,7 +56,7 @@ def check_path() -> CheckItem:
     return CheckItem(
         name="path",
         level=CheckLevel.warn,
-        detail="acpw not on PATH; add ~/.local/bin and reopen the shell",
+        detail=t("acpw not on PATH; add ~/.local/bin and reopen the shell"),
     )
 
 
@@ -60,7 +67,7 @@ def check_uv() -> CheckItem:
     return CheckItem(
         name="uv",
         level=CheckLevel.warn,
-        detail="uv not on PATH; updates will fail until it is installed",
+        detail=t("uv not on PATH; updates will fail until it is installed"),
     )
 
 
@@ -69,8 +76,16 @@ def check_registry() -> CheckItem:
     try:
         workers = load_registry().workers
     except Exception as exc:  # noqa: BLE001 - any parse failure is the finding
-        return CheckItem(name="registry", level=CheckLevel.fail, detail=f"{path}: {exc}")
-    return CheckItem(name="registry", level=CheckLevel.ok, detail=f"{path}: {len(workers)} workers")
+        return CheckItem(
+            name="registry",
+            level=CheckLevel.fail,
+            detail=t("{path}: {detail}", path=path, detail=exc),
+        )
+    return CheckItem(
+        name="registry",
+        level=CheckLevel.ok,
+        detail=t("{path}: {count} workers", path=path, count=len(workers)),
+    )
 
 
 def check_state() -> CheckItem:
@@ -80,8 +95,10 @@ def check_state() -> CheckItem:
         with tempfile.NamedTemporaryFile(dir=path):
             pass
     except OSError as exc:
-        return CheckItem(name="state", level=CheckLevel.fail, detail=f"{path}: {exc}")
-    return CheckItem(name="state", level=CheckLevel.ok, detail=f"{path} is writable")
+        return CheckItem(
+            name="state", level=CheckLevel.fail, detail=t("{path}: {detail}", path=path, detail=exc)
+        )
+    return CheckItem(name="state", level=CheckLevel.ok, detail=t("{path} is writable", path=path))
 
 
 def check_completion() -> CheckItem:
@@ -91,7 +108,7 @@ def check_completion() -> CheckItem:
     return CheckItem(
         name="completion",
         level=CheckLevel.warn,
-        detail="bash completion not registered; run: acpw install",
+        detail=t("bash completion not registered; run: acpw install"),
     )
 
 
@@ -103,16 +120,23 @@ def check_adapters() -> CheckItem:
         return CheckItem(
             name="adapters",
             level=CheckLevel.fail,
-            detail="no agent binary found; install grok, npx, or cursor-agent",
+            detail=t("no agent binary found; install grok, npx, or cursor-agent"),
         )
-    detail = f"present: {', '.join(present)}"
     if missing:
         return CheckItem(
             name="adapters",
             level=CheckLevel.warn,
-            detail=f"{detail}; missing: {', '.join(missing)}",
+            detail=t(
+                "present: {present}; missing: {missing}",
+                present=", ".join(present),
+                missing=", ".join(missing),
+            ),
         )
-    return CheckItem(name="adapters", level=CheckLevel.ok, detail=detail)
+    return CheckItem(
+        name="adapters",
+        level=CheckLevel.ok,
+        detail=t("present: {present}", present=", ".join(present)),
+    )
 
 
 def check_exposure() -> CheckItem:
@@ -127,13 +151,16 @@ def check_exposure() -> CheckItem:
         if host not in LOOPBACK:
             exposed.append(f"{name}={bind}")
     if not exposed:
-        return CheckItem(name="exposure", level=CheckLevel.ok, detail="all workers bind loopback")
+        return CheckItem(
+            name="exposure", level=CheckLevel.ok, detail=t("all workers bind loopback")
+        )
     return CheckItem(
         name="exposure",
         level=CheckLevel.warn,
-        detail=(
-            f"reachable beyond loopback: {', '.join(sorted(exposed))}; "
-            "workers run with always-approve and server-key travels in cleartext"
+        detail=t(
+            "reachable beyond loopback: {exposed}; workers run with always-approve and"
+            " server-key travels in cleartext",
+            exposed=", ".join(sorted(exposed)),
         ),
     )
 
@@ -154,12 +181,20 @@ def check_roundtrip() -> CheckItem:
             return CheckItem(
                 name="roundtrip",
                 level=CheckLevel.fail,
-                detail=f"expected {expected!r}, got {result.text!r}",
+                detail=t(
+                    "expected {expected!r}, got {got!r}",
+                    expected=expected,
+                    got=result.text,
+                ),
             )
         return CheckItem(
             name="roundtrip",
             level=CheckLevel.ok,
-            detail=f"pool session {result.session_id} answered, stop_reason={result.stop_reason}",
+            detail=t(
+                "pool session {session_id} answered, stop_reason={stop_reason}",
+                session_id=result.session_id,
+                stop_reason=result.stop_reason,
+            ),
         )
     except Exception as exc:  # noqa: BLE001 - the failure itself is the finding
         return CheckItem(name="roundtrip", level=CheckLevel.fail, detail=str(exc))
@@ -186,7 +221,7 @@ def run_selfcheck(*, live: bool = True) -> SelfCheckResponse:
         checks.append(check_roundtrip())
     else:
         checks.append(
-            CheckItem(name="roundtrip", level=CheckLevel.warn, detail="skipped (--no-live)")
+            CheckItem(name="roundtrip", level=CheckLevel.warn, detail=t("skipped (--no-live)"))
         )
     failed = [item.name for item in checks if item.level is CheckLevel.fail]
     warned = [item.name for item in checks if item.level is CheckLevel.warn]

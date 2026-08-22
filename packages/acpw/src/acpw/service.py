@@ -11,6 +11,7 @@ from pathlib import Path
 from acpw import __version__
 from acpw.adapters import ADAPTERS
 from acpw.client import AcpClient
+from acpw.i18n import t
 from acpw.paths import PACKAGE_DIR, registry_path, worker_state_dir
 from acpw.probe import probe, process_map, scan_listening
 from acpw.registry import (
@@ -171,11 +172,13 @@ def expand_stdio(argv: list[str]) -> list[str]:
 def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStartResponse:
     entry, spec = resolve_worker(name)
     if not entry.enabled:
-        raise AcpwError(ErrorResponse(error=f"{name} is disabled in registry", name=name))
+        raise AcpwError(
+            ErrorResponse(error=t("{name} is disabled in registry", name=name), name=name)
+        )
     if entry.url:
         live = probe(entry.bind or "127.0.0.1:0", secret_for(name, entry))
         if not live.live:
-            raise AcpwError(ErrorResponse(error="manual url is not live", name=name))
+            raise AcpwError(ErrorResponse(error=t("manual url is not live"), name=name))
         return WorkerStartResponse(name=name, bind=entry.bind, mode="manual-url", live=live)
     bind = entry.bind or spec.default_bind
     secret = ensure_secret(name)
@@ -186,7 +189,7 @@ def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStart
     workdir = cwd or os.getcwd()
     if spec.transport == TransportKind.native_ws and spec.kind == "grok":
         if not shutil.which("grok"):
-            raise AcpwError(ErrorResponse(error="grok not on PATH", name=name))
+            raise AcpwError(ErrorResponse(error=t("grok not on PATH"), name=name))
         argv = [
             "grok",
             "agent",
@@ -202,10 +205,14 @@ def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStart
     elif spec.transport == TransportKind.stdio_bridge:
         stdio = expand_stdio(list(entry.stdio_argv or spec.stdio_argv))
         if not stdio:
-            raise AcpwError(ErrorResponse(error=f"{name} missing stdio_argv", name=name))
+            raise AcpwError(
+                ErrorResponse(error=t("{name} missing stdio_argv", name=name), name=name)
+            )
         head = stdio[0]
         if head != sys.executable and not shutil.which(head) and not Path(head).exists():
-            raise AcpwError(ErrorResponse(error=f"binary not on PATH: {head}", name=name))
+            raise AcpwError(
+                ErrorResponse(error=t("binary not on PATH: {head}", head=head), name=name)
+            )
         argv = [
             sys.executable,
             "-m",
@@ -226,7 +233,11 @@ def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStart
     else:
         raise AcpwError(
             ErrorResponse(
-                error=f"cannot start transport {spec.transport}; use add --url", name=name
+                error=t(
+                    "cannot start transport {transport}; use add --url",
+                    transport=spec.transport,
+                ),
+                name=name,
             )
         )
     (worker_state_dir(name) / "pid").write_text(str(pid) + "\n")
@@ -234,7 +245,7 @@ def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStart
     ok = bool(live.live and live.via in LIVE)
     if not ok:
         raise AcpwError(
-            ErrorResponse(error="worker did not become reachable; inspect log", name=name)
+            ErrorResponse(error=t("worker did not become reachable; inspect log"), name=name)
         )
     return WorkerStartResponse(
         name=name,
@@ -313,10 +324,10 @@ def ping(name: str) -> PingResponse:
     bind = bind_of(entry, spec)
     secret = secret_for(name, entry)
     if not bind:
-        raise AcpwError(ErrorResponse(error="no bind/url", name=name))
+        raise AcpwError(ErrorResponse(error=t("no bind/url"), name=name))
     live = probe(bind, secret)
     if not live.live:
-        raise AcpwError(ErrorResponse(error="worker not live", name=name))
+        raise AcpwError(ErrorResponse(error=t("worker not live"), name=name))
     sock = ws_connect(entry.url or ws_url(bind, secret), timeout=8)
     try:
         client = AcpClient(sock)
@@ -349,7 +360,7 @@ def run(params: ExecParams) -> ExecResponse:
     secret = secret_for(params.name, entry)
     url = params.url or entry.url or (ws_url(bind, secret) if bind else None)
     if not url:
-        raise AcpwError(ErrorResponse(error="no websocket url", name=params.name))
+        raise AcpwError(ErrorResponse(error=t("no websocket url"), name=params.name))
     sock = ws_connect(url, timeout=8)
     try:
         client = AcpClient(sock)
@@ -370,9 +381,9 @@ def run(params: ExecParams) -> ExecResponse:
             if not _load_session_advertised(init):
                 raise AcpwError(
                     ErrorResponse(
-                        error=(
-                            f"worker {params.name} cannot resume sessions "
-                            "(loadSession not advertised)"
+                        error=t(
+                            "worker {name} cannot resume sessions (loadSession not advertised)",
+                            name=params.name,
                         ),
                         name=params.name,
                     )

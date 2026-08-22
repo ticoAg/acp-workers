@@ -4,6 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
+from acpw.i18n import t
 from acpw.types import InstallResponse, UninstallResponse
 
 MARKER = "# acpw bash completion"
@@ -28,7 +29,7 @@ def install_shell() -> InstallResponse:
     notes: list[str] = []
     acpw = shutil.which("acpw")
     if not acpw:
-        notes.append("acpw not on PATH; run: uv tool install --editable <this-repo>")
+        notes.append(t("acpw not on PATH; run: uv tool install --editable <this-repo>"))
     COMPLETION_DIR.mkdir(parents=True, exist_ok=True)
     completion_path = COMPLETION_DIR / "acpw"
     completion_path.write_text(_completion_script(), encoding="utf-8")
@@ -40,11 +41,11 @@ def install_shell() -> InstallResponse:
         with bashrc.open("a", encoding="utf-8") as fh:
             fh.write(f"\n{MARKER}\n{line}\n")
         updated = True
-        notes.append(f"appended {MARKER} to ~/.bashrc; open a new shell")
+        notes.append(t("appended {marker} to ~/.bashrc; open a new shell", marker=MARKER))
     local_bin = str(Path.home() / ".local" / "bin")
     path = os.environ.get("PATH", "")
     if local_bin not in path.split(":"):
-        notes.append(f"add {local_bin} to PATH")
+        notes.append(t("add {local_bin} to PATH", local_bin=local_bin))
     return InstallResponse(
         acpw=acpw, completion=str(completion_path), bashrc_updated=updated, notes=notes
     )
@@ -94,10 +95,10 @@ def uninstall_shell(*, purge: bool = False) -> UninstallResponse:
             if path.exists():
                 shutil.rmtree(path)
         purged = True
-        notes.append("removed ~/.config/acp-workers and ~/.local/state/acp-workers")
-    notes.append("CLI still on PATH until: uv tool uninstall acpw")
+        notes.append(t("removed ~/.config/acp-workers and ~/.local/state/acp-workers"))
+    notes.append(t("CLI still on PATH until: uv tool uninstall acpw"))
     notes.append(
-        "skill symlink: rm ~/.agents/skills/acp-workers  (or npx skills remove acp-workers -g)"
+        t("skill symlink: rm ~/.agents/skills/acp-workers  (or npx skills remove acp-workers -g)")
     )
     return UninstallResponse(
         completion_removed=completion_removed,

@@ -10,6 +10,7 @@ from typing import Any
 
 from acpw import __version__
 from acpw.client import MuxClient
+from acpw.i18n import t
 from acpw.paths import DEFAULT_POOL_BIND, POOL_STATE_NAME, worker_state_dir
 from acpw.probe import http_get
 from acpw.registry import AcpwError, ensure_secret, pid_alive, read_pid
@@ -129,10 +130,12 @@ def _open_mux(url: str) -> MuxClient:
             # directory looks perfectly alive right up to the moment we authenticate.
             raise AcpwError(
                 ErrorResponse(
-                    error=(
-                        f"pool on {_resolved_bind()} rejected our key: it was started with a "
-                        f"different secret than {_state() / 'secret'}. Run 'acpw pool down' "
-                        "and start it again, or point ACPW_STATE_DIR at the one it uses."
+                    error=t(
+                        "pool on {bind} rejected our key: it was started with a "
+                        "different secret than {secret}. Run 'acpw pool down' "
+                        "and start it again, or point ACPW_STATE_DIR at the one it uses.",
+                        bind=_resolved_bind(),
+                        secret=_state() / "secret",
                     )
                 )
             ) from exc
@@ -160,19 +163,22 @@ def _resume_error(name: str, session_id: str, exc: BaseException) -> AcpwError:
     code, message = _rpc_error_parts(exc)
     lowered = message.lower()
     if "held by another client" in lowered:
-        text = f"session {session_id} is held by another client"
+        text = t("session {session_id} is held by another client", session_id=session_id)
     elif "loadsession" in lowered or "cannot resume" in lowered:
-        text = (
-            message
-            if "cannot resume" in lowered
-            else f"worker {name} cannot resume sessions (loadSession not advertised)"
+        text = t(
+            "worker {name} cannot resume sessions (loadSession not advertised)",
+            name=name,
         )
     elif "unknown session" in lowered:
-        text = f"unknown session {session_id}"
+        text = t("unknown session {session_id}", session_id=session_id)
     elif code == -32001:
         text = message
     else:
-        text = f"cannot resume session {session_id}: {message}"
+        text = t(
+            "cannot resume session {session_id}: {message}",
+            session_id=session_id,
+            message=message,
+        )
     return AcpwError(ErrorResponse(error=text, name=name))
 
 
@@ -289,7 +295,7 @@ def pool_up(
             break
         time.sleep(0.25)
     if code != 200:
-        raise AcpwError(ErrorResponse(error="pool did not become reachable; inspect log"))
+        raise AcpwError(ErrorResponse(error=t("pool did not become reachable; inspect log")))
     url = ws_url(bind, secret)
     if workers:
         _prewarm(url, workers, cwd, max(1.0, deadline - time.time()))
@@ -369,7 +375,7 @@ def pool_ping(name: str) -> PingResponse:
     this spawns the child if needed and reports what that child said about itself.
     """
     if not pool_live():
-        raise AcpwError(ErrorResponse(error="pool not live", name=name))
+        raise AcpwError(ErrorResponse(error=t("pool not live"), name=name))
     client = _open_mux(pool_url())
     try:
         client.rpc("initialize", _init_params(), timeout=20)

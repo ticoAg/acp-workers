@@ -5,6 +5,7 @@ import urllib.parse
 from pathlib import Path
 
 from acpw.adapters import ADAPTERS
+from acpw.i18n import t
 from acpw.io import load_json, save_json
 from acpw.paths import (
     OLD_DEFAULT_PORTS,
@@ -60,12 +61,14 @@ def save_registry(data: Registry) -> None:
 def resolve_worker(name: str) -> tuple[Worker, Adapter]:
     data = load_registry()
     if name not in data.workers:
-        raise AcpwError(ErrorResponse(error=f"unknown worker {name}", known=sorted(data.workers)))
+        raise AcpwError(
+            ErrorResponse(error=t("unknown worker {name}", name=name), known=sorted(data.workers))
+        )
     entry = data.workers[name]
     kind = entry.kind or name
     spec = ADAPTERS.get(kind)
     if spec is None and not entry.url:
-        raise AcpwError(ErrorResponse(error=f"unknown kind {kind}", name=name))
+        raise AcpwError(ErrorResponse(error=t("unknown kind {kind}", kind=kind), name=name))
     if spec is None:
         spec = Adapter(
             kind=kind,
@@ -120,7 +123,9 @@ def add_worker(params: WorkerCreateParams) -> Worker:
 def remove_worker(name: str) -> None:
     data = load_registry()
     if name not in data.workers:
-        raise AcpwError(ErrorResponse(error=f"unknown worker {name}", known=sorted(data.workers)))
+        raise AcpwError(
+            ErrorResponse(error=t("unknown worker {name}", name=name), known=sorted(data.workers))
+        )
     del data.workers[name]
     save_registry(data)
 

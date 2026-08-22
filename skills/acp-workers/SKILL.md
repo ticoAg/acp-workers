@@ -5,7 +5,7 @@ license: MIT
 compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
-  version: "0.6.2"
+  version: "0.6.3"
 ---
 
 # ACP Workers
@@ -94,6 +94,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | `ping` / `run` | 握手 / 派活（`-p` 或 `-f`）。`run` 返回 `session_id`；续会话加 `--session-id` |
 | `pool up` / `pool down` / `pool ls` | 与 `up` / `down` / `ls` 的 pool 字段同义，留给脚本 |
 | `add` / `rm` | 登记、注销 URL |
+| `lang` | `acpw lang set zh-CN` 写入配置；`acpw lang` / `lang get` 查看。一次调用用 `--lang` |
 | `install` / `uninstall` | bash 补全；`--purge` 再停 worker 并删 registry/state |
 
 ## 验收清单
