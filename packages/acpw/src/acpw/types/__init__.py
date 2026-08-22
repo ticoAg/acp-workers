@@ -12,6 +12,7 @@ from acpw.types.registry import (
 )
 from acpw.types.session import ExecParams, ExecResponse, PingResponse, ToolCallOut
 from acpw.types.shared import ProbeVia, TransportKind
+from acpw.types.version import VersionResponse
 from acpw.types.worker import (
     WorkerStartResponse,
     WorkerStatus,
@@ -35,6 +36,7 @@ __all__ = [
     "ToolCallOut",
     "TransportKind",
     "UninstallResponse",
+    "VersionResponse",
     "Worker",
     "WorkerCreateParams",
     "WorkerDeleted",

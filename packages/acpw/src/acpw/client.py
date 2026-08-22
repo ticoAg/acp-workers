@@ -14,7 +14,9 @@ class AcpClient:
         self._n = 0
         self.notifications: list[dict[str, Any]] = []
 
-    def rpc(self, method: str, params: dict[str, Any] | None = None, timeout: float = 60.0) -> dict[str, Any]:
+    def rpc(
+        self, method: str, params: dict[str, Any] | None = None, timeout: float = 60.0
+    ) -> dict[str, Any]:
         self._n += 1
         msg_id = self._n
         self.sock.settimeout(timeout)
@@ -44,13 +46,18 @@ class AcpClient:
                         {
                             "jsonrpc": "2.0",
                             "id": obj["id"],
-                            "result": {"outcome": {"outcome": "selected", "optionId": "allow-once"}},
+                            "result": {
+                                "outcome": {"outcome": "selected", "optionId": "allow-once"}
+                            },
                         }
                     ),
                     client=True,
                 )
                 continue
-            if obj.get("method") in {"fs/read_text_file", "fs/write_text_file"} and obj.get("id") is not None:
+            if (
+                obj.get("method") in {"fs/read_text_file", "fs/write_text_file"}
+                and obj.get("id") is not None
+            ):
                 ws_send(
                     self.sock,
                     json.dumps(

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "ACP",
+      "description": "Skills for dispatching work to resident Agent Client Protocol workers on loopback.",
+      "skills": ["acp-workers"]
+    }
+  ]
+}

@@ -85,10 +85,18 @@ def _bridge_session(conn: socket.socket, child: StdioChild) -> None:
         msg = json.loads(raw)
         method = msg.get("method")
         if method == "initialize" and child.init_result is not None:
-            ws_send(conn, json.dumps({"jsonrpc": "2.0", "id": msg.get("id"), "result": child.init_result}), client=False)
+            ws_send(
+                conn,
+                json.dumps({"jsonrpc": "2.0", "id": msg.get("id"), "result": child.init_result}),
+                client=False,
+            )
             continue
         if method == "authenticate" and child.auth_result is not None:
-            ws_send(conn, json.dumps({"jsonrpc": "2.0", "id": msg.get("id"), "result": child.auth_result}), client=False)
+            ws_send(
+                conn,
+                json.dumps({"jsonrpc": "2.0", "id": msg.get("id"), "result": child.auth_result}),
+                client=False,
+            )
             continue
         with child.lock:
             child.write_line(msg)

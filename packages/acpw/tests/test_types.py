@@ -9,7 +9,9 @@ def test_registry_roundtrip() -> None:
 
 
 def test_exec_response_json() -> None:
-    payload = ExecResponse(ok=True, name="mock", session_id="s", stop_reason="end_turn", text="pong")
+    payload = ExecResponse(
+        ok=True, name="mock", session_id="s", stop_reason="end_turn", text="pong"
+    )
     parsed = ExecResponse.model_validate_json(payload.model_dump_json())
     assert parsed.text == "pong"
 

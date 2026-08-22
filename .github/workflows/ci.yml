@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  acpw:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/acpw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every skill has SKILL.md with a matching name
+        run: |
+          set -e
+          for dir in skills/*/; do
+            name="$(basename "$dir")"
+            test -f "$dir/SKILL.md" || { echo "$dir: missing SKILL.md"; exit 1; }
+            grep -qx "name: $name" "$dir/SKILL.md" || { echo "$dir: frontmatter name != $name"; exit 1; }
+            lines=$(wc -l < "$dir/SKILL.md")
+            test "$lines" -le 500 || { echo "$dir: SKILL.md is $lines lines, limit is 500"; exit 1; }
+          done
+      - name: Skill scripts parse and are executable
+        run: |
+          set -e
+          for script in skills/*/scripts/*.sh; do
+            [ -e "$script" ] || continue
+            bash -n "$script"
+            test -x "$script" || { echo "$script: missing executable bit"; exit 1; }
+          done
+      - uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: ./skills
+      - name: Versions agree across skill, package, and bootstrap floor
+        run: |
+          set -e
+          pkg=$(sed -n 's/^version = "\(.*\)"/\1/p' packages/acpw/pyproject.toml | head -1)
+          for dir in skills/*/; do
+            meta=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$dir/metadata.json")
+            front=$(sed -n 's/^  version: "\(.*\)"$/\1/p' "$dir/SKILL.md" | head -1)
+            test "$meta" = "$front" || { echo "$dir: metadata.json $meta != SKILL.md frontmatter $front"; exit 1; }
+            floor=$(sed -n 's/^required_version="\(.*\)"$/\1/p' "$dir/scripts/ensure-acpw.sh" 2>/dev/null | head -1)
+            if [ -n "$floor" ] && [ "$floor" != "$pkg" ]; then
+              lowest=$(printf '%s\n%s\n' "$floor" "$pkg" | sort -V | head -n1)
+              test "$lowest" = "$floor" || { echo "$dir: bootstrap floor $floor exceeds released acpw $pkg"; exit 1; }
+            fi
+          done

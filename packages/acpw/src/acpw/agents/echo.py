@@ -32,7 +32,11 @@ def main() -> None:
                     "protocolVersion": 1,
                     "agentCapabilities": {
                         "loadSession": False,
-                        "promptCapabilities": {"image": False, "audio": False, "embeddedContext": True},
+                        "promptCapabilities": {
+                            "image": False,
+                            "audio": False,
+                            "embeddedContext": True,
+                        },
                     },
                     "authMethods": [],
                     "agentInfo": {"name": "acpw-mock", "version": "0"},

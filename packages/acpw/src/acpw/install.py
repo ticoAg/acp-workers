@@ -45,7 +45,9 @@ def install_shell() -> InstallResponse:
     path = os.environ.get("PATH", "")
     if local_bin not in path.split(":"):
         notes.append(f"add {local_bin} to PATH")
-    return InstallResponse(acpw=acpw, completion=str(completion_path), bashrc_updated=updated, notes=notes)
+    return InstallResponse(
+        acpw=acpw, completion=str(completion_path), bashrc_updated=updated, notes=notes
+    )
 
 
 def strip_bashrc_marker(text: str) -> str:
@@ -94,7 +96,9 @@ def uninstall_shell(*, purge: bool = False) -> UninstallResponse:
         purged = True
         notes.append("removed ~/.config/acp-workers and ~/.local/state/acp-workers")
     notes.append("CLI still on PATH until: uv tool uninstall acpw")
-    notes.append("skill symlink: rm ~/.agents/skills/acp-workers  (or npx skills remove acp-workers -g)")
+    notes.append(
+        "skill symlink: rm ~/.agents/skills/acp-workers  (or npx skills remove acp-workers -g)"
+    )
     return UninstallResponse(
         completion_removed=completion_removed,
         bashrc_updated=bashrc_updated,

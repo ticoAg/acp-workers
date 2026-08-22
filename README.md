@@ -2,33 +2,89 @@
 
 Resident [ACP](https://agentclientprotocol.com) workers for host-agent dispatch.
 
-The **host** agent plans and verifies. **Workers** (Grok, Claude Code, Codex, Cursor) execute over a loopback WebSocket.
+The **host** agent plans and verifies. **Workers** (Grok, Claude Code, Codex, Cursor) execute over a loopback WebSocket. This repository ships the skill that teaches agents the workflow, plus the `acpw` CLI that implements it.
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
-Install, use, and uninstall procedures live in [`SKILL.md`](SKILL.md) (the copy agents load). Short version:
+## Available Skills
+
+### acp-workers
+
+Dispatch a scoped coding task to a resident ACP worker and verify the result yourself.
+
+**Use when:**
+
+- Handing a self-contained coding task to grok / claude / codex / cursor in the background
+- Listing, starting, or stopping resident workers (`acpw ls` / `up` / `down`)
+- Registering an already-running `grok agent serve` as a worker
+
+**Not for:** grok TUI consultation or debate, MCP server setup, `grok -p`, or treating a worker's self-report as verification.
+
+## Installation
 
 ```bash
-npx skills add ticoAg/acp-workers -g -y
-uv tool install git+https://github.com/ticoAg/acp-workers
-acpw install
-acpw ls && acpw up grok && acpw run grok -f task.txt
-acpw uninstall --purge
-uv tool uninstall acpw
-npx skills remove acp-workers -g
+npx skills add ticoAg/acp-workers --skill acp-workers
+bash <installed-skill-dir>/scripts/ensure-acpw.sh --completion
 ```
 
-From a checkout: `uv tool install --editable .` then `acpw install`.
+The skill ships an idempotent bootstrap that installs the `acpw` CLI with uv and registers bash completion. To do it by hand instead:
 
-## skills.sh layout
+```bash
+uv tool install "git+https://github.com/ticoAg/acp-workers#subdirectory=packages/acpw"
+acpw install
+```
 
-This repo is a single-skill package:
+Registry/state locations and the uninstall order live in [`skills/acp-workers/references/install.md`](skills/acp-workers/references/install.md).
 
-- `SKILL.md` at the repository root (`name: acp-workers` matches the directory name)
-- optional `scripts/` / `references/` / `assets/` as in the [Agent Skills spec](https://agentskills.io/specification)
-- `npx skills add ticoAg/acp-workers` discovers the root `SKILL.md`
+## Updating
 
-There is no extra publish step for skills.sh. Public GitHub + install telemetry is enough.
+```bash
+npx skills update acp-workers
+bash <installed-skill-dir>/scripts/ensure-acpw.sh --update
+```
+
+The bootstrap also self-heals: it compares `acpw version` against the floor the skill needs and upgrades on its own when the CLI is behind. The skill and the CLI ship under one version number; see [CHANGELOG.md](CHANGELOG.md).
+
+## Usage
+
+```
+Start a grok worker in this repo and hand it the failing test in /tmp/task.txt
+```
+
+```bash
+acpw ls && acpw up grok --cwd "$PWD" && acpw run grok -f /tmp/task.txt
+```
+
+## Repository Structure
+
+```
+skills/
+  acp-workers/
+    SKILL.md          # agent instructions
+    AGENTS.md         # cross-agent entry point
+    README.md         # human-facing skill docs
+    metadata.json     # version, abstract, references
+    scripts/          # ensure-acpw.sh, the CLI bootstrap
+    references/       # install, wire protocol
+    assets/           # example registry file
+packages/
+  acpw/               # the CLI: pyproject, src/acpw, tests
+skills.sh.json        # skills.sh grouping manifest
+CHANGELOG.md          # one version line for both artifacts
+```
+
+## Development
+
+```bash
+cd packages/acpw
+uv sync
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv tool install --editable .   # put a live acpw on PATH
+```
+
+Tests never touch a real agent binary; they drive the hidden `mock` adapter, an in-package echo agent.
 
 ## License
 

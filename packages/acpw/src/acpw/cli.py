@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from pydantic import BaseModel
 
+from acpw import __version__
 from acpw.gateway import run_gateway
 from acpw.install import install_shell, uninstall_shell
+from acpw.paths import PACKAGE_DIR
 from acpw.registry import AcpwError
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
-from acpw.types import ErrorResponse, ExecParams, WorkerCreateParams
+from acpw.types import ErrorResponse, ExecParams, VersionResponse, WorkerCreateParams
 
 app = typer.Typer(
     name="acpw",
@@ -32,6 +35,42 @@ def fail(exc: Exception) -> None:
     if isinstance(exc, AcpwError):
         emit(exc.payload, code=1)
     emit(ErrorResponse(error=str(exc)), code=1)
+
+
+def version_payload() -> VersionResponse:
+    return VersionResponse(
+        version=__version__,
+        python=".".join(str(part) for part in sys.version_info[:3]),
+        location=str(PACKAGE_DIR),
+    )
+
+
+def version_option(value: bool) -> None:
+    if value:
+        emit(version_payload())
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    _version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            help="Print the acpw version and exit.",
+            callback=version_option,
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
+    """Resident ACP workers. Host plans; workers execute."""
+
+
+@app.command("version")
+def cmd_version() -> None:
+    """Print the installed acpw version."""
+    emit(version_payload())
 
 
 @app.command("ls")
@@ -143,7 +182,9 @@ def cmd_install() -> None:
 
 @app.command("uninstall")
 def cmd_uninstall(
-    purge: Annotated[bool, typer.Option(help="also stop workers and delete registry/state")] = False,
+    purge: Annotated[
+        bool, typer.Option(help="also stop workers and delete registry/state")
+    ] = False,
 ) -> None:
     """Remove bash completion. Does not uninstall the uv tool or skill."""
     emit(uninstall_shell(purge=purge))

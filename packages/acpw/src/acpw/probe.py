@@ -79,7 +79,9 @@ def argv_running(needle: str) -> list[int]:
         if not entry.name.isdigit():
             continue
         try:
-            cmdline = (entry / "cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace")
+            cmdline = (
+                (entry / "cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace")
+            )
         except OSError:
             continue
         if needle in cmdline and "acpw" not in cmdline.split()[0:1]:
@@ -91,7 +93,12 @@ def argv_running(needle: str) -> list[int]:
 
 def cmdline_has(pid: int, fragment: str) -> bool:
     try:
-        raw = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\x00", b" ").decode("utf-8", "replace")
+        raw = (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\x00", b" ")
+            .decode("utf-8", "replace")
+        )
     except OSError:
         return False
     return fragment in raw

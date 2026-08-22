@@ -8,6 +8,7 @@ import sys
 import time
 from pathlib import Path
 
+from acpw import __version__
 from acpw.adapters import ADAPTERS
 from acpw.client import AcpClient
 from acpw.paths import PACKAGE_DIR, REGISTRY_PATH, worker_state_dir
@@ -213,12 +214,18 @@ def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStart
         ]
         pid = spawn_daemon(argv, log_path)
     else:
-        raise AcpwError(ErrorResponse(error=f"cannot start transport {spec.transport}; use add --url", name=name))
+        raise AcpwError(
+            ErrorResponse(
+                error=f"cannot start transport {spec.transport}; use add --url", name=name
+            )
+        )
     (worker_state_dir(name) / "pid").write_text(str(pid) + "\n")
     live = wait_live(bind, secret, timeout)
     ok = bool(live.live and live.via in LIVE)
     if not ok:
-        raise AcpwError(ErrorResponse(error="worker did not become reachable; inspect log", name=name))
+        raise AcpwError(
+            ErrorResponse(error="worker did not become reachable; inspect log", name=name)
+        )
     return WorkerStartResponse(
         name=name,
         bind=bind,
@@ -302,8 +309,11 @@ def ping(name: str) -> PingResponse:
             "initialize",
             {
                 "protocolVersion": 1,
-                "clientInfo": {"name": "acpw", "version": "0.1"},
-                "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False},
+                "clientInfo": {"name": "acpw", "version": __version__},
+                "clientCapabilities": {
+                    "fs": {"readTextFile": False, "writeTextFile": False},
+                    "terminal": False,
+                },
             },
             timeout=20,
         )
@@ -332,8 +342,11 @@ def run(params: ExecParams) -> ExecResponse:
             "initialize",
             {
                 "protocolVersion": 1,
-                "clientInfo": {"name": "acpw", "version": "0.1"},
-                "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False},
+                "clientInfo": {"name": "acpw", "version": __version__},
+                "clientCapabilities": {
+                    "fs": {"readTextFile": False, "writeTextFile": False},
+                    "terminal": False,
+                },
             },
             timeout=30,
         )

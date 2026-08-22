@@ -41,4 +41,4 @@ Claude / Codex / Cursor have no Grok-style `serve`. `acpw gateway` keeps one std
 
 Default binds: grok `127.0.0.1:48191`, claude `48192`, codex `48193`, cursor `48194`.
 
-Override `stdio_argv` on a registry entry if the machine uses a different binary than `scripts/adapters.json`.
+Adapter defaults (binary, `stdio_argv`, default bind) live in `packages/acpw/src/acpw/adapters.py`. Override `stdio_argv` on a registry entry when the machine uses a different binary; see [../assets/registry.example.json](../assets/registry.example.json) for the entry shape.

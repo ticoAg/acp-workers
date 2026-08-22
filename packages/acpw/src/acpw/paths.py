@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-SKILL_DIR = PACKAGE_DIR.parents[1]
 
 CONFIG_DIR = Path(os.environ.get("ACPW_CONFIG_DIR", Path.home() / ".config" / "acp-workers"))
 STATE_DIR = Path(os.environ.get("ACPW_STATE_DIR", Path.home() / ".local" / "state" / "acp-workers"))

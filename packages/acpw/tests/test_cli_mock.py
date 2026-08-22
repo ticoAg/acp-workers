@@ -6,9 +6,20 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from acpw import __version__
 from acpw.cli import app
 
 runner = CliRunner()
+
+
+def test_version_matches_package_metadata() -> None:
+    for argv in (["version"], ["--version"]):
+        result = runner.invoke(app, argv)
+        assert result.exit_code == 0, result.output
+        body = json.loads(result.output)
+        assert body["ok"] is True
+        assert body["version"] == __version__
+        assert body["version"] != "0+unknown"
 
 
 def test_mock_lifecycle(tmp_path: Path, monkeypatch) -> None:
