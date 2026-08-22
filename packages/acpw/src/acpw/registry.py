@@ -6,7 +6,12 @@ from pathlib import Path
 
 from acpw.adapters import ADAPTERS
 from acpw.io import load_json, save_json
-from acpw.paths import OLD_DEFAULT_PORTS, registry_path, worker_state_dir
+from acpw.paths import (
+    OLD_DEFAULT_PORTS,
+    SUPERSEDED_DEFAULT_BINDS,
+    registry_path,
+    worker_state_dir,
+)
 from acpw.types import Adapter, ErrorResponse, Registry, TransportKind, Worker, WorkerCreateParams
 from acpw.ws import split_bind
 
@@ -35,9 +40,12 @@ def load_registry() -> Registry:
     data = Registry.model_validate(raw)
     changed = False
     for name, worker in data.workers.items():
-        old = OLD_DEFAULT_PORTS.get(worker.kind or name)
-        spec = ADAPTERS.get(worker.kind or name)
-        if old and spec and worker.bind == old and not worker.url:
+        kind = worker.kind or name
+        spec = ADAPTERS.get(kind)
+        if not spec or worker.url:
+            continue
+        stale = {OLD_DEFAULT_PORTS.get(kind), SUPERSEDED_DEFAULT_BINDS.get(kind)}
+        if worker.bind in stale - {None}:
             worker.bind = spec.default_bind
             changed = True
     if changed:

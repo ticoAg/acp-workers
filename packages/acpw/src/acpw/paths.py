@@ -5,12 +5,26 @@ from pathlib import Path
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 
+# The multiplexing daemon: one port, one secret, many children.
+DEFAULT_POOL_BIND = "0.0.0.0:48190"
+POOL_STATE_NAME = "_pool"
+
+# Binds that were once the shipped default. A registry entry still carrying one of these was
+# never chosen by the user, so it is migrated to the current default on load.
 OLD_DEFAULT_PORTS = {
     "grok": "127.0.0.1:2419",
     "claude": "127.0.0.1:2420",
     "codex": "127.0.0.1:2421",
     "cursor": "127.0.0.1:2422",
     "mock": "127.0.0.1:2499",
+}
+
+SUPERSEDED_DEFAULT_BINDS = {
+    "grok": "127.0.0.1:48191",
+    "claude": "127.0.0.1:48192",
+    "codex": "127.0.0.1:48193",
+    "cursor": "127.0.0.1:48194",
+    "mock": "127.0.0.1:48199",
 }
 
 

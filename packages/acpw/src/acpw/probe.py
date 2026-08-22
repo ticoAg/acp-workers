@@ -9,7 +9,7 @@ from pathlib import Path
 
 from acpw.adapters import ADAPTERS, PROCESS_NEEDLES
 from acpw.types import ListeningHit, ProbeResult, ProbeVia
-from acpw.ws import split_bind, ws_connect, ws_url
+from acpw.ws import connect_host, split_bind, ws_connect, ws_url
 
 
 def http_get(url: str, timeout: float = 1.5) -> tuple[int, str]:
@@ -24,6 +24,7 @@ def http_get(url: str, timeout: float = 1.5) -> tuple[int, str]:
 
 def probe(bind: str, secret: str | None = None) -> ProbeResult:
     host, port = split_bind(bind)
+    host = connect_host(host)
     sock = socket.socket()
     sock.settimeout(0.4)
     try:
@@ -59,7 +60,7 @@ def scan_listening() -> list[ListeningHit]:
     except (OSError, subprocess.CalledProcessError):
         return found
     for line in out.splitlines():
-        if "127.0.0.1:" not in line and "[::1]:" not in line:
+        if not any(token in line for token in ("127.0.0.1:", "[::1]:", "0.0.0.0:", "[::]:", "*:")):
             continue
         for kind, spec in ADAPTERS.items():
             if spec.hidden:

@@ -7,6 +7,7 @@ import socket
 import tempfile
 
 from acpw import __version__
+from acpw.adapters import ADAPTERS
 from acpw.install import COMPLETION_DIR
 from acpw.paths import PACKAGE_DIR, registry_path, state_dir
 from acpw.registry import load_registry
@@ -18,8 +19,10 @@ from acpw.types import (
     SelfCheckResponse,
     WorkerCreateParams,
 )
+from acpw.ws import split_bind
 
 ROUNDTRIP_PROMPT = "selfcheck"
+LOOPBACK = {"127.0.0.1", "localhost", "::1", "[::1]"}
 
 
 def free_port() -> int:
@@ -111,6 +114,29 @@ def check_adapters() -> CheckItem:
     return CheckItem(name="adapters", level=CheckLevel.ok, detail=detail)
 
 
+def check_exposure() -> CheckItem:
+    """Workers run with always-approve and the key rides in cleartext, so a LAN bind matters."""
+    exposed: list[str] = []
+    for name, entry in load_registry().workers.items():
+        spec = ADAPTERS.get(entry.kind or name)
+        bind = entry.bind or (spec.default_bind if spec else None)
+        if not bind:
+            continue
+        host, _ = split_bind(bind)
+        if host not in LOOPBACK:
+            exposed.append(f"{name}={bind}")
+    if not exposed:
+        return CheckItem(name="exposure", level=CheckLevel.ok, detail="all workers bind loopback")
+    return CheckItem(
+        name="exposure",
+        level=CheckLevel.warn,
+        detail=(
+            f"reachable beyond loopback: {', '.join(sorted(exposed))}; "
+            "workers run with always-approve and server-key travels in cleartext"
+        ),
+    )
+
+
 def check_roundtrip() -> CheckItem:
     """Start a throwaway mock worker, dispatch one prompt, and read the answer back."""
     name = f"selfcheck-{os.getpid()}"
@@ -151,6 +177,7 @@ def run_selfcheck(*, live: bool = True) -> SelfCheckResponse:
         check_state(),
         check_completion(),
         check_adapters(),
+        check_exposure(),
     ]
     if live:
         checks.append(check_roundtrip())

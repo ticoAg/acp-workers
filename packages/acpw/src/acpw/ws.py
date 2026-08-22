@@ -11,13 +11,24 @@ import urllib.parse
 GUIDE = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
+WILDCARD_HOSTS = {"0.0.0.0", "::", "[::]", ""}
+
+
 def split_bind(bind: str) -> tuple[str, int]:
     host, _, port = bind.rpartition(":")
-    return (host or "127.0.0.1"), int(port)
+    return (host or "0.0.0.0"), int(port)
+
+
+def connect_host(host: str) -> str:
+    """A listen address is not always a reachable one: 0.0.0.0 is dialed as loopback."""
+    if host in WILDCARD_HOSTS:
+        return "127.0.0.1"
+    return host
 
 
 def ws_url(bind: str, secret: str | None) -> str:
     host, port = split_bind(bind)
+    host = connect_host(host)
     url = f"ws://{host}:{port}/ws"
     if secret:
         url += "?server-key=" + urllib.parse.quote(secret)

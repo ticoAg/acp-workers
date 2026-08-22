@@ -9,13 +9,22 @@ import typer
 from pydantic import BaseModel
 
 from acpw import __version__
+from acpw.adapters import ADAPTERS
+from acpw.daemon import run_daemon
 from acpw.gateway import run_gateway
 from acpw.install import install_shell, uninstall_shell
-from acpw.paths import PACKAGE_DIR
-from acpw.registry import AcpwError
+from acpw.paths import DEFAULT_POOL_BIND, PACKAGE_DIR
+from acpw.pool import pool_down, pool_live, pool_ping, pool_run, pool_status, pool_up
+from acpw.registry import AcpwError, load_registry
 from acpw.selfcheck import run_selfcheck
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
-from acpw.types import ErrorResponse, ExecParams, VersionResponse, WorkerCreateParams
+from acpw.types import (
+    ErrorResponse,
+    ExecParams,
+    TransportKind,
+    VersionResponse,
+    WorkerCreateParams,
+)
 
 app = typer.Typer(
     name="acpw",
@@ -36,6 +45,13 @@ def fail(exc: Exception) -> None:
     if isinstance(exc, AcpwError):
         emit(exc.payload, code=1)
     emit(ErrorResponse(error=str(exc)), code=1)
+
+
+def poolable(name: str) -> bool:
+    """The daemon owns stdio children. A native serve worker like grok is its own process."""
+    entry = load_registry().workers.get(name)
+    spec = ADAPTERS.get((entry.kind if entry else None) or name)
+    return spec is not None and spec.transport is TransportKind.stdio_bridge
 
 
 def version_payload() -> VersionResponse:
@@ -145,10 +161,17 @@ def cmd_down(name: str) -> None:
 
 
 @app.command("ping")
-def cmd_ping(name: str) -> None:
+def cmd_ping(
+    name: str,
+    pool: Annotated[
+        bool | None,
+        typer.Option("--pool/--no-pool", help="Default: use the pool daemon when it is live."),
+    ] = None,
+) -> None:
     """ACP initialize against a live worker."""
+    via_pool = (pool_live() and poolable(name)) if pool is None else pool
     try:
-        emit(ping(name))
+        emit(pool_ping(name) if via_pool else ping(name))
     except Exception as exc:
         fail(exc)
 
@@ -163,6 +186,10 @@ def cmd_run(
     session_id: Annotated[str | None, typer.Option()] = None,
     url: Annotated[str | None, typer.Option()] = None,
     timeout: Annotated[float, typer.Option()] = 600,
+    pool: Annotated[
+        bool | None,
+        typer.Option("--pool/--no-pool", help="Default: use the pool daemon when it is live."),
+    ] = None,
 ) -> None:
     """Dispatch a prompt to a worker."""
     text = prompt
@@ -170,19 +197,18 @@ def cmd_run(
         text = prompt_file.read_text(encoding="utf-8")
     if not (text or "").strip():
         emit(ErrorResponse(error="empty prompt"), code=1)
+    params = ExecParams(
+        name=name,
+        prompt=text or "",
+        cwd=str((cwd or Path.cwd()).resolve()),
+        session_id=session_id,
+        url=url,
+        timeout=timeout,
+    )
+    # A manual --url names one specific socket, so it always bypasses the pool.
+    via_pool = (pool_live() and not url and poolable(name)) if pool is None else pool
     try:
-        emit(
-            run(
-                ExecParams(
-                    name=name,
-                    prompt=text or "",
-                    cwd=str((cwd or Path.cwd()).resolve()),
-                    session_id=session_id,
-                    url=url,
-                    timeout=timeout,
-                )
-            )
-        )
+        emit(pool_run(params) if via_pool else run(params))
     except Exception as exc:
         fail(exc)
 
@@ -201,6 +227,57 @@ def cmd_uninstall(
 ) -> None:
     """Remove bash completion. Does not uninstall the uv tool or skill."""
     emit(uninstall_shell(purge=purge))
+
+
+pool_app = typer.Typer(
+    name="pool",
+    help="One resident daemon, one port, many children.",
+    no_args_is_help=True,
+)
+app.add_typer(pool_app)
+
+
+@pool_app.command("up")
+def cmd_pool_up(
+    bind: Annotated[str, typer.Option()] = DEFAULT_POOL_BIND,
+    worker: Annotated[list[str] | None, typer.Option(help="Pre-warm these workers.")] = None,
+    cwd: Annotated[Path | None, typer.Option()] = None,
+    timeout: Annotated[float, typer.Option()] = 45,
+) -> None:
+    """Start the pool daemon if it is not live."""
+    try:
+        emit(
+            pool_up(
+                bind=bind,
+                workers=list(worker) if worker else None,
+                cwd=str(cwd) if cwd else None,
+                timeout=timeout,
+            )
+        )
+    except Exception as exc:
+        fail(exc)
+
+
+@pool_app.command("down")
+def cmd_pool_down() -> None:
+    """Stop the pool daemon and every child it owns."""
+    emit(pool_down())
+
+
+@pool_app.command("ls")
+@pool_app.command("status", hidden=True)
+def cmd_pool_ls() -> None:
+    """Pool liveness, children, and session counts."""
+    emit(pool_status())
+
+
+@app.command("daemon", hidden=True)
+def cmd_daemon(
+    secret_file: Annotated[Path, typer.Option()],
+    bind: Annotated[str, typer.Option()] = DEFAULT_POOL_BIND,
+) -> None:
+    """Internal multiplexing daemon. Started by `acpw pool up`."""
+    run_daemon(bind, str(secret_file))
 
 
 @app.command("gateway", hidden=True)

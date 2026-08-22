@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Added
+
+- Pool: one resident daemon on `48190` holding several stdio children, so a host drives many agents over a single WebSocket. `acpw pool up` / `down` / `ls`, and `acpw run` / `ping` take `--pool` / `--no-pool`.
+- `acpw run NAME` prefers the pool when the daemon is live and `NAME` is a stdio worker. Grok is a native `serve` worker and is never routed into the pool; `--url` also bypasses it.
+- `references/pool.md` for users and `docs/pool-protocol.md` for the wire contract.
+
+### Changed
+
+- Workers and the pool bind `0.0.0.0` by default, keeping the high ports. Clients dial `127.0.0.1`. Registry entries still on the superseded loopback defaults are migrated on load.
+- `acpw selfcheck` gained an `exposure` check: it warns for every worker reachable beyond loopback, because workers run always-approve and the server key travels in cleartext.
+
 ## [0.2.0]
 
 ### Added
