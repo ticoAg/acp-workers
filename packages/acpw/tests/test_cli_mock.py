@@ -2,14 +2,27 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from acpw import __version__
 from acpw.cli import app
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _off_the_default_pool_port(monkeypatch):
+    """`run` and `ping` start a pool on their own now, so keep it off 48190 and reap it."""
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    monkeypatch.setenv("ACPW_POOL_BIND", f"127.0.0.1:{port}")
+    yield
+    runner.invoke(app, ["pool", "down"])
 
 
 def test_version_matches_package_metadata() -> None:

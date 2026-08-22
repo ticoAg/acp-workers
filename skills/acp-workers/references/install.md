@@ -44,7 +44,7 @@ acpw selfcheck --no-live  # 只查静态项，不起进程
 skill 和 CLI 同版本号发布。三处必须一致：`packages/acpw/pyproject.toml`、`skills/acp-workers/metadata.json`、`SKILL.md` frontmatter 里的 `metadata.version`；CI 会卡这一点。
 
 ```bash
-acpw version   # {"ok":true,"version":"0.3.0","python":"3.12.14","location":"…"}
+acpw version   # {"ok":true,"version":"0.4.0","python":"3.12.14","location":"…"}
 acpw --version # 同上
 ```
 
@@ -87,7 +87,7 @@ acpw install   # bash 补全 → ~/.local/share/bash-completion/completions/acpw
 | --- | --- | --- |
 | `~/.config/acp-workers/registry.json` | worker 配置，结构见 [../assets/registry.example.json](../assets/registry.example.json) | `ACPW_CONFIG_DIR` |
 | `~/.local/state/acp-workers/<name>/` | secret、pid、日志 | `ACPW_STATE_DIR` |
-| `~/.local/state/acp-workers/_pool/` | pool daemon 的 secret、pid、日志、bind | `ACPW_STATE_DIR`；bind 另可用 `ACPW_POOL_BIND` |
+| `~/.local/state/acp-workers/_pool/` | pool daemon 的 secret、pid、日志、bind、`sessions.json` | `ACPW_STATE_DIR`；bind 另可用 `ACPW_POOL_BIND` |
 
 registry 不需要手写，`acpw add` / `acpw up` 会维护。示例文件只用于对照字段：`bind` 默认 `0.0.0.0`，写成 `127.0.0.1` 就只收本机；`stdio_argv` 用于二进制不在默认位置时覆盖。`_pool` 下划线开头，不会和 worker 名字撞。
 

@@ -17,7 +17,7 @@ Dispatch a scoped coding task to a resident ACP worker and verify the result you
 - Handing a self-contained coding task to grok / claude / codex / cursor in the background
 - Listing, starting, or stopping resident workers (`acpw ls` / `up` / `down`)
 - Registering an already-running `grok agent serve` as a worker
-- Driving several stdio workers concurrently over one connection (`acpw pool`)
+- Driving several stdio workers concurrently over one connection (`acpw run` starts the pool if needed)
 
 **Not for:** grok TUI consultation or debate, MCP server setup, `grok -p`, or treating a worker's self-report as verification.
 
@@ -79,18 +79,20 @@ Start a grok worker in this repo and hand it the failing test in /tmp/task.txt
 acpw ls && acpw up grok --cwd "$PWD" && acpw run grok -f /tmp/task.txt
 ```
 
-One worker, one port. For several stdio workers at once there is the pool: a single
-daemon on `48190` holding the children, so one connection drives all of them.
+One worker, one port. Stdio workers (claude, cursor, codex, mock) go through the
+pool by default: a single daemon on `48190` holding the children, so one
+connection drives all of them. `acpw run` / `acpw ping` start that daemon if
+none is live. `acpw pool up` pre-warms children.
 
 ```bash
-acpw pool up --worker claude --worker cursor
-acpw run claude -f /tmp/a.txt &   # both go through 48190
+acpw run claude -f /tmp/a.txt &
 acpw run cursor -f /tmp/b.txt &
 ```
 
-`acpw run` picks the pool on its own when the daemon is live and the target is a stdio
-worker; `--pool` / `--no-pool` override it. Grok is native `serve` and always keeps its
-own port. Details in [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md).
+`--no-pool` uses a per-worker gateway; `--pool` forces the pool. Grok is native
+`serve` and always keeps its own port. An explicit `--url` also bypasses the
+pool. `--session-id` continues a pooled conversation across separate `acpw run`
+invocations. Details in [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md).
 
 Workers bind `0.0.0.0` by default and clients dial loopback. They run always-approve and
 the server key travels in cleartext, so do not expose these ports to a network you do not

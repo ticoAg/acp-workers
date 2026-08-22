@@ -257,6 +257,11 @@ def stop(name: str) -> WorkerStopResponse:
     return WorkerStopResponse(name=name, signaled=killed)
 
 
+def _load_session_advertised(init: dict) -> bool:
+    caps = init.get("agentCapabilities")
+    return isinstance(caps, dict) and caps.get("loadSession") is True
+
+
 def _auth_if_needed(client: AcpClient, init: dict) -> None:
     methods = init.get("authMethods") or []
     default = (init.get("_meta") or {}).get("defaultAuthMethodId")
@@ -352,6 +357,16 @@ def run(params: ExecParams) -> ExecResponse:
         )
         _auth_if_needed(client, init)
         if params.session_id:
+            if not _load_session_advertised(init):
+                raise AcpwError(
+                    ErrorResponse(
+                        error=(
+                            f"worker {params.name} cannot resume sessions "
+                            "(loadSession not advertised)"
+                        ),
+                        name=params.name,
+                    )
+                )
             session = client.rpc(
                 "session/load",
                 {"sessionId": params.session_id, "cwd": params.cwd, "mcpServers": []},

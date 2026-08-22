@@ -120,10 +120,59 @@ def _collect_text(updates: list[dict[str, Any]]) -> tuple[str, list[ToolCallOut]
 
 
 def _open_mux(url: str) -> MuxClient:
-    sock = ws_connect(url, timeout=8)
+    try:
+        sock = ws_connect(url, timeout=8)
+    except Exception as exc:
+        if "401" in str(exc):
+            # /health needs no key, so a daemon started against a different state
+            # directory looks perfectly alive right up to the moment we authenticate.
+            raise AcpwError(
+                ErrorResponse(
+                    error=(
+                        f"pool on {_resolved_bind()} rejected our key: it was started with a "
+                        f"different secret than {_state() / 'secret'}. Run 'acpw pool down' "
+                        "and start it again, or point ACPW_STATE_DIR at the one it uses."
+                    )
+                )
+            ) from exc
+        raise
     client = MuxClient(sock)
     client.start()
     return client
+
+
+def _rpc_error_parts(exc: BaseException) -> tuple[int | None, str]:
+    raw = str(exc)
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None, raw
+    if not isinstance(payload, dict):
+        return None, raw
+    code = payload.get("code")
+    message = payload.get("message")
+    text = message.strip() if isinstance(message, str) and message.strip() else raw
+    return (code if isinstance(code, int) else None), text
+
+
+def _resume_error(name: str, session_id: str, exc: BaseException) -> AcpwError:
+    code, message = _rpc_error_parts(exc)
+    lowered = message.lower()
+    if "held by another client" in lowered:
+        text = f"session {session_id} is held by another client"
+    elif "loadsession" in lowered or "cannot resume" in lowered:
+        text = (
+            message
+            if "cannot resume" in lowered
+            else f"worker {name} cannot resume sessions (loadSession not advertised)"
+        )
+    elif "unknown session" in lowered:
+        text = f"unknown session {session_id}"
+    elif code == -32001:
+        text = message
+    else:
+        text = f"cannot resume session {session_id}: {message}"
+    return AcpwError(ErrorResponse(error=text, name=name))
 
 
 def pool_secret() -> str:
@@ -162,11 +211,14 @@ def pool_status() -> PoolStatus:
 
 
 def pool_up(
-    bind: str = DEFAULT_POOL_BIND,
+    bind: str | None = None,
     workers: list[str] | None = None,
     cwd: str | None = None,
     timeout: float = 45,
 ) -> PoolStartResponse:
+    # Everything else asks _resolved_bind() where the pool is, so starting one anywhere
+    # else just produces a daemon nobody can find.
+    bind = bind or _resolved_bind()
     secret = pool_secret()
     state = _state()
     log_path = state / "server.log"
@@ -264,17 +316,23 @@ def pool_down() -> PoolStopResponse:
 
 
 def pool_ping(name: str) -> PingResponse:
+    """Reach the named worker, not just the daemon in front of it.
+
+    Handshaking with the pool proves nothing about the agent the caller asked for, so
+    this spawns the child if needed and reports what that child said about itself.
+    """
     if not pool_live():
         raise AcpwError(ErrorResponse(error="pool not live", name=name))
     client = _open_mux(pool_url())
     try:
-        init = client.rpc("initialize", _init_params(), timeout=20)
+        client.rpc("initialize", _init_params(), timeout=20)
+        worker = client.rpc("worker/up", {"name": name}, timeout=60)
         return PingResponse(
-            ok=True,
+            ok=bool(worker.get("alive")),
             name=name,
-            protocol_version=init.get("protocolVersion"),
-            agent_version=(init.get("_meta") or {}).get("agentVersion"),
-            agent_info=init.get("agentInfo") or init.get("serverInfo"),
+            protocol_version=worker.get("protocolVersion"),
+            agent_version=worker.get("agentVersion"),
+            agent_info=worker.get("agentInfo"),
         )
     finally:
         client.close()
@@ -288,17 +346,9 @@ def pool_run(params: ExecParams) -> ExecResponse:
         _auth_if_needed(client, init)
         worker_meta = {"worker": params.name}
         if params.session_id:
-            session = client.rpc(
-                "session/load",
-                {
-                    "sessionId": params.session_id,
-                    "cwd": params.cwd,
-                    "mcpServers": [],
-                    "_meta": worker_meta,
-                },
-                timeout=30,
-            )
-            session_id = session.get("sessionId") or params.session_id
+            # Resume is the daemon's job. Hand the id to session/prompt; never session/new
+            # or session/load — a silent new session would drop the conversation.
+            session_id = params.session_id
         else:
             session = client.rpc(
                 "session/new",
@@ -310,11 +360,16 @@ def pool_run(params: ExecParams) -> ExecResponse:
                 timeout=60,
             )
             session_id = session.get("sessionId")
-        result = client.rpc(
-            "session/prompt",
-            {"sessionId": session_id, "prompt": [{"type": "text", "text": params.prompt}]},
-            timeout=params.timeout,
-        )
+        try:
+            result = client.rpc(
+                "session/prompt",
+                {"sessionId": session_id, "prompt": [{"type": "text", "text": params.prompt}]},
+                timeout=params.timeout,
+            )
+        except RuntimeError as exc:
+            if params.session_id:
+                raise _resume_error(params.name, params.session_id, exc) from exc
+            raise
         text, tools = _collect_text(client.updates(session_id or ""))
         return ExecResponse(
             ok=True,

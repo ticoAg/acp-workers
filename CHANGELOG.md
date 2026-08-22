@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-22
+
+### Changed
+
+- Pool is the default path for stdio workers. `acpw run NAME` and `acpw ping NAME` start the daemon if none is live; `acpw pool up` remains for pre-warming. `--no-pool` uses a per-worker gateway; `--pool` forces the pool. Native serve (grok) stays on its own gateway; an explicit `--url` also bypasses the pool.
+- `acpw pool up` with no `--bind` honours `ACPW_POOL_BIND` / the recorded bind file instead of always using `0.0.0.0:48190`.
+- Public session ids (`acpw-s` plus 16 hex) outlive the WebSocket that created them (L1), the agent child (L2: respawn and `session/load`), and the daemon (L3: atomic write to `_pool/sessions.json`). Resume still depends on the agent advertising and honouring `loadSession`.
+
+### Added
+
+- A session is held by one live connection. Another client that tries to resume it gets `session <id> is held by another client`; once that connection drops, the session is resumable again.
+- Before `session/load`, the daemon checks `agentCapabilities.loadSession`. If absent or false it returns `worker <name> cannot resume sessions (loadSession not advertised)` instead of opening a blank session.
+
+### Fixed
+
+- `acpw ping NAME` through the pool now spawns/initializes the named child and reports that child's `agentInfo` / `protocolVersion`. It previously only handshook with the daemon.
+- A 401 against a daemon that still answers `/health` (started with a different state directory) now names the bind, the secret path, and the fix: `acpw pool down`, or point `ACPW_STATE_DIR` at the directory that daemon uses.
+
 ## [0.3.0]
 
 ### Added
@@ -45,7 +63,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `acp-workers` skill: dispatch workflow, wire protocol reference, install reference, example registry.
 - `scripts/ensure-acpw.sh`: idempotent CLI bootstrap with a version floor, `--update`, `--force`, and `--completion`.
 
-[Unreleased]: https://github.com/ticoAg/acp-workers/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ticoAg/acp-workers/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ticoAg/acp-workers/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/ticoAg/acp-workers/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ticoAg/acp-workers/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/ticoAg/acp-workers/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ticoAg/acp-workers/releases/tag/v0.1.0

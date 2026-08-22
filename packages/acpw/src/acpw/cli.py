@@ -54,6 +54,29 @@ def poolable(name: str) -> bool:
     return spec is not None and spec.transport is TransportKind.stdio_bridge
 
 
+def use_pool(name: str, *, url: str | None, choice: bool | None) -> bool:
+    """Stdio workers go through the pool by default, starting it if nobody has yet.
+
+    A manual --url names one specific socket, so it is never redirected.
+    """
+    if choice is False:
+        return False
+    if choice is None and (url or not poolable(name)):
+        return False
+    if choice is True and not poolable(name):
+        # The daemon only knows how to own stdio children. Say that here rather than
+        # letting it fail later as an opaque spawn error.
+        raise AcpwError(
+            ErrorResponse(
+                error=f"worker {name} runs its own server and cannot be pooled; drop --pool",
+                name=name,
+            )
+        )
+    if not pool_live():
+        pool_up()
+    return True
+
+
 def version_payload() -> VersionResponse:
     return VersionResponse(
         version=__version__,
@@ -165,12 +188,12 @@ def cmd_ping(
     name: str,
     pool: Annotated[
         bool | None,
-        typer.Option("--pool/--no-pool", help="Default: use the pool daemon when it is live."),
+        typer.Option("--pool/--no-pool", help="Default: the pool, for stdio workers."),
     ] = None,
 ) -> None:
     """ACP initialize against a live worker."""
-    via_pool = (pool_live() and poolable(name)) if pool is None else pool
     try:
+        via_pool = use_pool(name, url=None, choice=pool)
         emit(pool_ping(name) if via_pool else ping(name))
     except Exception as exc:
         fail(exc)
@@ -188,7 +211,7 @@ def cmd_run(
     timeout: Annotated[float, typer.Option()] = 600,
     pool: Annotated[
         bool | None,
-        typer.Option("--pool/--no-pool", help="Default: use the pool daemon when it is live."),
+        typer.Option("--pool/--no-pool", help="Default: the pool, for stdio workers."),
     ] = None,
 ) -> None:
     """Dispatch a prompt to a worker."""
@@ -205,9 +228,8 @@ def cmd_run(
         url=url,
         timeout=timeout,
     )
-    # A manual --url names one specific socket, so it always bypasses the pool.
-    via_pool = (pool_live() and not url and poolable(name)) if pool is None else pool
     try:
+        via_pool = use_pool(name, url=url, choice=pool)
         emit(pool_run(params) if via_pool else run(params))
     except Exception as exc:
         fail(exc)
@@ -239,7 +261,7 @@ app.add_typer(pool_app)
 
 @pool_app.command("up")
 def cmd_pool_up(
-    bind: Annotated[str, typer.Option()] = DEFAULT_POOL_BIND,
+    bind: Annotated[str | None, typer.Option(help=f"Default: {DEFAULT_POOL_BIND}")] = None,
     worker: Annotated[list[str] | None, typer.Option(help="Pre-warm these workers.")] = None,
     cwd: Annotated[Path | None, typer.Option()] = None,
     timeout: Annotated[float, typer.Option()] = 45,

@@ -15,7 +15,7 @@ Every command prints one JSON line. `ok` means the ACP turn ended, not that the 
 
 Grok is served natively (`grok agent serve`); Claude Code, Codex, and Cursor speak stdio ACP and are bridged onto the same URL by `acpw gateway`.
 
-`acpw pool up` runs one daemon on `48190` that owns the stdio children instead, so a single connection drives several of them concurrently. `acpw run` prefers it while it is live; `--pool` / `--no-pool` decide explicitly. The wire contract is in [`docs/pool-protocol.md`](../../docs/pool-protocol.md).
+`acpw pool up` runs one daemon on `48190` that owns the stdio children, so a single connection drives several of them concurrently. `acpw run` and `acpw ping` take that path by default for stdio workers and start the daemon if none is live; `--pool` / `--no-pool` decide explicitly. Grok (native `serve`) and an explicit `--url` never go through the pool. `--session-id` continues a pooled conversation across separate invocations. The wire contract is in [`docs/pool-protocol.md`](../../docs/pool-protocol.md).
 
 The agent-facing instructions ship alongside this package as the `acp-workers` skill: see [`skills/acp-workers/`](../../skills/acp-workers/) in the repository, or install it with `npx skills add ticoAg/acp-workers --skill acp-workers`.
 

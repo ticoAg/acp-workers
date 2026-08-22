@@ -9,10 +9,12 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import secrets
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import urllib.parse
 from collections.abc import Callable
@@ -73,7 +75,7 @@ def initialize_result() -> dict[str, Any]:
     return {
         "protocolVersion": 1,
         "agentCapabilities": {
-            "loadSession": False,
+            "loadSession": True,
             "promptCapabilities": {"image": False, "audio": False, "embeddedContext": True},
         },
         "authMethods": [],
@@ -95,6 +97,52 @@ def child_initialize_params() -> dict[str, Any]:
 
 
 _child_tokens = itertools.count(1)
+
+
+def _sessions_path() -> Path:
+    return worker_state_dir(POOL_STATE_NAME) / "sessions.json"
+
+
+def _durable_record(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    worker = raw.get("worker")
+    native = raw.get("native")
+    if not isinstance(worker, str) or not worker or not isinstance(native, str) or not native:
+        return None
+    cwd = raw.get("cwd")
+    return {"worker": worker, "native": native, "cwd": cwd if isinstance(cwd, str) else None}
+
+
+def _read_durable_map() -> dict[str, dict[str, Any]]:
+    path = _sessions_path()
+    if not path.exists():
+        log("sessions.json absent; starting with empty map")
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        log(f"sessions.json unreadable ({exc}); starting with empty map")
+        return {}
+    if not isinstance(data, dict):
+        log("sessions.json is not an object; starting with empty map")
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for key, value in data.items():
+        record = _durable_record(value) if isinstance(key, str) else None
+        if record is None:
+            log(f"sessions.json: skipping malformed entry {key!r}")
+            continue
+        out[key] = record
+    if out:
+        log(f"loaded {len(out)} durable session(s) from {path}")
+    return out
+
+
+def _child_supports_load(child: PooledChild) -> bool:
+    init = child.init_result or {}
+    caps = init.get("agentCapabilities")
+    return isinstance(caps, dict) and bool(caps.get("loadSession"))
 
 
 class PooledChild:
@@ -289,10 +337,14 @@ class Conn:
 class Session:
     worker: str
     child: PooledChild
-    conn: Conn
+    # The connection currently driving it, or None while nobody is attached. A session
+    # outlives the connection that opened it. The in-memory binding dies with the child;
+    # the durable record stays so a later request can take the L2 path.
+    conn: Conn | None
     # What the child calls this session. Children pick their own ids and two of them may
     # well pick the same string, so it is never used as a key on the daemon side.
     native: str
+    cwd: str | None
 
 
 class Pool:
@@ -305,9 +357,13 @@ class Pool:
         self.public_ids: dict[tuple[int, str], str] = {}
         self.lock = threading.Lock()
         self.spawn_locks: dict[str, threading.Lock] = {}
+        # Per public session id: two in-flight resumes of the same conversation must not
+        # each spawn a child and each send session/load.
+        self.resume_locks: dict[str, threading.Lock] = {}
         self.inbound_lock = threading.Lock()
         self.inbound_n = 0
-        self.session_n = 0
+        self.disk_lock = threading.Lock()
+        self.durable: dict[str, dict[str, Any]] = _read_durable_map()
 
     # ---- inventory -------------------------------------------------------------------
 
@@ -409,7 +465,10 @@ class Pool:
         if child is None:
             return False
         child.kill()
-        log(f"{name}: child killed, {len(dropped)} session(s) dropped")
+        log(
+            f"{name}: child killed, {len(dropped)} in-memory session(s) cleared; "
+            "durable records kept"
+        )
         return True
 
     def on_child_exit(self, child: PooledChild) -> None:
@@ -417,7 +476,10 @@ class Pool:
             if self.children.get(child.name) is child:
                 del self.children[child.name]
             dropped = self._drop_sessions(lambda session: session.child is not child)
-        log(f"{child.name}: child exited, {len(dropped)} session(s) dropped")
+        log(
+            f"{child.name}: child exited, {len(dropped)} in-memory session(s) cleared; "
+            "durable records kept"
+        )
 
     def shutdown(self) -> None:
         with self.lock:
@@ -443,14 +505,15 @@ class Pool:
         with self.lock:
             public = self.public_ids.get((child.token, native))
             session = self.sessions.get(public) if public else None
-        if session is None or public is None:
+            conn = session.conn if session is not None else None
+        if session is None or public is None or conn is None or not conn.open:
             return None
-        return session.conn, {**params, "sessionId": public}
+        return conn, {**params, "sessionId": public}
 
     def on_child_notification(self, child: PooledChild, obj: dict[str, Any]) -> None:
         route = self.upstream(child, obj.get("params"))
         if route is None:
-            log(f"{child.name}: {obj.get('method')} for unroutable session dropped")
+            log(f"{child.name}: {obj.get('method')} for unknown or detached session dropped")
             return
         conn, params = route
         conn.send(
@@ -466,7 +529,7 @@ class Pool:
         child_id = obj.get("id")
         if route is None:
             # Nothing to forward to; answering keeps the child from waiting forever.
-            log(f"{child.name}: {obj.get('method')} for unroutable session refused")
+            log(f"{child.name}: {obj.get('method')} for unknown or detached session refused")
             self.reply_to_child(
                 child,
                 child_id,
@@ -524,7 +587,8 @@ class Pool:
         if not isinstance(worker, str) or not worker:
             raise RouteError(ERR_ROUTE, "missing _meta.worker")
         cwd = params.get("cwd") if isinstance(params, dict) else None
-        child, _ = self.ensure_child(worker, cwd if isinstance(cwd, str) else None)
+        workdir = cwd if isinstance(cwd, str) else None
+        child, _ = self.ensure_child(worker, workdir)
         if method == "session/load" and isinstance(params, dict):
             # Only translatable if this connection opened it; otherwise the host is naming
             # a child-native id and the child gets to decide whether it knows it.
@@ -535,27 +599,92 @@ class Pool:
             if isinstance(result, dict):
                 native = result.get("sessionId")
                 if isinstance(native, str):
-                    public = self.bind_session(worker, child, conn, native)
-                    if public is not None:
-                        obj = {**obj, "result": {**result, "sessionId": public}}
+                    public = self.bind_session(worker, child, conn, native, cwd=workdir)
+                    obj = {**obj, "result": {**result, "sessionId": public}}
             conn.send({"jsonrpc": "2.0", "id": msg_id, **_answer_of(obj)})
 
         # `_meta` is forwarded verbatim; the contract does not ask for it to be stripped.
         child.request(method, params, handler)
 
-    def bind_session(self, worker: str, child: PooledChild, conn: Conn, native: str) -> str | None:
-        """Mint the id the host will use. Child ids are not unique across children."""
+    def bind_session(
+        self,
+        worker: str,
+        child: PooledChild,
+        conn: Conn,
+        native: str,
+        *,
+        cwd: str | None = None,
+        public: str | None = None,
+    ) -> str:
+        """Mint or reuse the id the host will use. Child ids are not unique across children.
+
+        The id is random rather than sequential because a session outlives the connection
+        that opened it: knowing the id is what entitles a later connection to resume the
+        conversation, the same way knowing the server key entitles you to the socket.
+        """
         with self.lock:
-            if conn.released:
-                return None
             existing = self.public_ids.get((child.token, native))
-            if existing is not None and existing in self.sessions:
-                return existing
-            self.session_n += 1
-            public = f"acpw-s{self.session_n}"
-            self.sessions[public] = Session(worker=worker, child=child, conn=conn, native=native)
-            self.public_ids[(child.token, native)] = public
+            if public is None and existing is not None and existing in self.sessions:
+                session = self.sessions[existing]
+                session.conn = conn
+                if cwd is not None:
+                    session.cwd = cwd
+                self.durable[existing] = {
+                    "worker": worker,
+                    "native": native,
+                    "cwd": session.cwd,
+                }
+                public = existing
+            else:
+                if public is None:
+                    public = f"acpw-s{secrets.token_hex(8)}"
+                old = self.sessions.get(public)
+                if old is not None:
+                    self.public_ids.pop((old.child.token, old.native), None)
+                if existing is not None and existing != public:
+                    leftover = self.sessions.pop(existing, None)
+                    if leftover is not None:
+                        self.public_ids.pop((leftover.child.token, leftover.native), None)
+                    self.durable.pop(existing, None)
+                self.sessions[public] = Session(
+                    worker=worker, child=child, conn=conn, native=native, cwd=cwd
+                )
+                self.public_ids[(child.token, native)] = public
+                self.durable[public] = {"worker": worker, "native": native, "cwd": cwd}
+        self._persist_durable()
         return public
+
+    def _persist_durable(self) -> None:
+        """Write sessions.json without holding Pool.lock across the I/O."""
+        with self.disk_lock:
+            with self.lock:
+                snapshot = {key: dict(value) for key, value in self.durable.items()}
+            path = _sessions_path()
+            fd = -1
+            tmp_name = ""
+            try:
+                fd, tmp_name = tempfile.mkstemp(
+                    prefix=".sessions.", suffix=".tmp", dir=str(path.parent)
+                )
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fd = -1
+                    json.dump(snapshot, fh)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp_name, path)
+                tmp_name = ""
+            except (OSError, TypeError, ValueError) as exc:
+                log(f"sessions.json write failed: {exc}")
+                if fd >= 0:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+                if tmp_name:
+                    try:
+                        os.unlink(tmp_name)
+                    except OSError:
+                        pass
 
     def downstream(self, child: PooledChild, params: dict[str, Any]) -> dict[str, Any]:
         """Public sessionId -> the one the child issued."""
@@ -568,15 +697,79 @@ class Pool:
             return params
         return {**params, "sessionId": session.native}
 
+    def _attach(self, conn: Conn, session: Session, session_id: str) -> Session:
+        """Caller holds self.lock."""
+        holder = session.conn
+        if holder is conn:
+            return session
+        if holder is not None and holder.open:
+            # Two hosts prompting one agent would interleave; the first one keeps it.
+            raise RouteError(ERR_SESSION, f"session {session_id} is held by another client")
+        session.conn = conn
+        return session
+
     def session_for(self, conn: Conn, session_id: Any) -> Session:
+        """L1 only: attach if the session is in memory and its child is alive."""
         with self.lock:
             session = self.sessions.get(session_id) if isinstance(session_id, str) else None
-        if session is None or not session.child.alive():
-            raise RouteError(ERR_SESSION, f"unknown session {session_id}")
-        if session.conn is not conn:
-            # Public ids are guessable; a session belongs to the connection that opened it.
-            raise RouteError(ERR_SESSION, f"unknown session {session_id}")
-        return session
+            if session is None or not session.child.alive():
+                raise RouteError(ERR_SESSION, f"unknown session {session_id}")
+            return self._attach(conn, session, session_id)
+
+    def resume_session(self, conn: Conn, session_id: str) -> Session:
+        """L2/L3: respawn the worker, session/load the native id, rebind the same public id.
+
+        Runs on the serve_request thread. Must not be called from a child reader.
+        """
+        with self.lock:
+            if session_id not in self.durable:
+                raise RouteError(ERR_SESSION, f"unknown session {session_id}")
+            lock = self.resume_locks.setdefault(session_id, threading.Lock())
+        with lock:
+            with self.lock:
+                session = self.sessions.get(session_id)
+                if session is not None and session.child.alive():
+                    return self._attach(conn, session, session_id)
+                raw = self.durable.get(session_id)
+                record = dict(raw) if raw is not None else None
+            if record is None:
+                raise RouteError(ERR_SESSION, f"unknown session {session_id}")
+            worker = str(record["worker"])
+            native = str(record["native"])
+            cwd = record.get("cwd")
+            cwd_str = cwd if isinstance(cwd, str) else None
+            child, _ = self.ensure_child(worker, cwd_str)
+            if not _child_supports_load(child):
+                raise RouteError(
+                    ERR_SESSION,
+                    f"worker {worker} cannot resume sessions (loadSession not advertised)",
+                )
+            load_params: dict[str, Any] = {"sessionId": native, "mcpServers": []}
+            if cwd_str is not None:
+                load_params["cwd"] = cwd_str
+            try:
+                result = child.call("session/load", load_params)
+            except RouteError:
+                raise RouteError(ERR_SESSION, f"unknown session {session_id}") from None
+            loaded = result.get("sessionId")
+            if isinstance(loaded, str) and loaded:
+                native = loaded
+            self.bind_session(worker, child, conn, native, cwd=cwd_str, public=session_id)
+            log(f"session {session_id}: resumed on {worker} native={native}")
+            with self.lock:
+                session = self.sessions.get(session_id)
+                if session is None:
+                    raise RouteError(ERR_SESSION, f"unknown session {session_id}")
+                return self._attach(conn, session, session_id)
+
+    def resolve_session(self, conn: Conn, session_id: str) -> Session:
+        """L1 attach, else L2/L3 resume. Held-by-another is never turned into a resume."""
+        try:
+            return self.session_for(conn, session_id)
+        except RouteError as exc:
+            if exc.code != ERR_SESSION or exc.message.endswith("held by another client"):
+                raise
+            return self.resume_session(conn, session_id)
 
     def serve_request(self, conn: Conn, msg: dict[str, Any]) -> None:
         msg_id = msg.get("id")
@@ -608,6 +801,7 @@ class Pool:
                 raise RouteError(ERR_ROUTE, "missing name")
             cwd = params.get("cwd")
             child, spawned = self.ensure_child(name, cwd if isinstance(cwd, str) else None)
+            init = child.init_result or {}
             conn.send(
                 _result(
                     msg_id,
@@ -616,6 +810,11 @@ class Pool:
                         "alive": child.alive(),
                         "pid": child.proc.pid,
                         "already": not spawned,
+                        # The child's own handshake, so a caller can tell which agent it
+                        # actually reached instead of only hearing from the daemon.
+                        "protocolVersion": init.get("protocolVersion"),
+                        "agentInfo": init.get("agentInfo") or init.get("serverInfo"),
+                        "agentVersion": (init.get("_meta") or {}).get("agentVersion"),
                     },
                 )
             )
@@ -631,7 +830,7 @@ class Pool:
             return
         session_id = params.get("sessionId") if isinstance(params, dict) else None
         if isinstance(session_id, str):
-            session = self.session_for(conn, session_id)
+            session = self.resolve_session(conn, session_id)
             self.forward(
                 conn, msg_id, session.child, method, self.downstream(session.child, params)
             )
@@ -695,7 +894,13 @@ class Pool:
         conn.close()
         with self.lock:
             conn.released = True
-            dropped = self._drop_sessions(lambda session: session.conn is not conn)
+            # Sessions outlive their connection. They are detached, not dropped, so the
+            # next `acpw run --session-id` finds the conversation still there.
+            detached = 0
+            for session in self.sessions.values():
+                if session.conn is conn:
+                    session.conn = None
+                    detached += 1
         with conn.state_lock:
             inbound = list(conn.inbound.items())
             conn.inbound.clear()
@@ -705,8 +910,8 @@ class Pool:
                 child_id,
                 {"error": {"code": ERR_CHILD, "message": "host connection closed"}},
             )
-        if dropped:
-            log(f"connection closed, {len(dropped)} session(s) released; children stay warm")
+        if detached:
+            log(f"connection closed, {detached} session(s) detached; children stay warm")
 
 
 def _auth_method_id(init: dict[str, Any]) -> str | None:

@@ -108,7 +108,7 @@ def test_pool_drives_two_children_over_one_connection(tmp_path: Path, monkeypatc
         assert json.loads(down.output)["live"] is False
 
 
-def test_session_ids_do_not_cross_connections(tmp_path: Path, monkeypatch) -> None:
+def test_a_live_holder_cannot_be_displaced(tmp_path: Path, monkeypatch) -> None:
     isolate(tmp_path, monkeypatch)
     register("alpha")
 
@@ -136,9 +136,11 @@ def test_session_ids_do_not_cross_connections(tmp_path: Path, monkeypatch) -> No
                     timeout=20,
                 )
             except RuntimeError as exc:
-                assert "unknown session" in str(exc), exc
+                # Sessions outlive connections, so a detached one may be resumed by
+                # anyone holding the id. One that is still held may not be taken.
+                assert "held by another client" in str(exc), exc
             else:
-                raise AssertionError("another connection reached a session it does not own")
+                raise AssertionError("a second connection displaced a live session holder")
         finally:
             owner.close()
             intruder.close()
