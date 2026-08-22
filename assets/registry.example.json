@@ -1,0 +1,8 @@
+{
+  "workers": {
+    "grok": { "kind": "grok", "enabled": true, "bind": "127.0.0.1:48191" },
+    "claude": { "kind": "claude", "enabled": true, "bind": "127.0.0.1:48192" },
+    "codex": { "kind": "codex", "enabled": true, "bind": "127.0.0.1:48193" },
+    "cursor": { "kind": "cursor", "enabled": true, "bind": "127.0.0.1:48194" }
+  }
+}

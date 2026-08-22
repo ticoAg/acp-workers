@@ -1,0 +1,44 @@
+# ACP Workers protocol
+
+## URL
+
+All workers, native or bridged:
+
+```
+ws://127.0.0.1:<port>/ws?server-key=<secret>
+```
+
+- Missing/wrong key on `/ws` → HTTP `401`.
+- Bridged workers also serve `GET /health` → JSON `{ok, name, transport, child_alive, child_pid}`.
+- Grok native serve has no `/health`; a `401` on `/ws` without a key is the liveness signal.
+
+## ACP on the socket
+
+Text WebSocket frames, one JSON-RPC object per frame (same methods as ACP stdio):
+
+1. `initialize`
+2. `authenticate` when `authMethods` is non-empty (`cached_token` for Grok, `cursor_login` for Cursor)
+3. `session/new` `{cwd, mcpServers: [], _meta: {yoloMode: true}}` or `session/load`
+4. `session/prompt` `{sessionId, prompt: [{type:"text", text}]}`
+5. `session/update` notifications, then the prompt result `{stopReason}`
+
+`exec` answers `session/request_permission` with `allow-once`. It does not implement client `fs/*`.
+
+## Who inherits what (Grok native)
+
+`start grok` is `grok agent --always-approve --no-leader serve`. Same process as the TUI for:
+
+- `~/.grok/auth.json`
+- `~/.grok/config.toml` (`permission.deny`, `permission_mode`, `[mcp_servers]`, model)
+- project `AGENTS.md` / `CLAUDE.md` from `--cwd`
+- skills/plugins discovered from that cwd
+
+It does **not** inherit Cursor Auto-run. Deny rules still win over always-approve.
+
+## Stdio bridge
+
+Claude / Codex / Cursor have no Grok-style `serve`. `acpw gateway` keeps one stdio ACP child and one in-flight WebSocket client. `initialize`/`authenticate` results are cached so the next `ping`/`run` does not re-handshake the child.
+
+Default binds: grok `127.0.0.1:48191`, claude `48192`, codex `48193`, cursor `48194`.
+
+Override `stdio_argv` on a registry entry if the machine uses a different binary than `scripts/adapters.json`.
