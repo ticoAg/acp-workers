@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Bump when the skill starts relying on a newer CLI. Below this, the script upgrades.
-required_version="0.6.3"
+required_version="0.7.0"
 
 force=0
 update=0
@@ -38,7 +38,15 @@ notes=()
 installed_version() {
   command -v acpw >/dev/null 2>&1 || return 0
   # Pre-0.1.0 builds have no version command; an empty answer counts as outdated.
-  acpw version 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p'
+  # New CLI prints markdown (`version: 0.7.0`); older CLI printed one JSON line.
+  local out v
+  out=$(acpw version 2>/dev/null) || return 0
+  v=$(printf '%s\n' "$out" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -n1)
+  if [ -n "$v" ]; then
+    printf '%s\n' "$v"
+    return
+  fi
+  printf '%s\n' "$out" | sed -n 's/^version:[[:space:]]*//p' | head -n1
 }
 
 older_than() { # older_than WHAT FLOOR

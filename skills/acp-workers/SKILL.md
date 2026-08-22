@@ -5,12 +5,12 @@ license: MIT
 compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
-  version: "0.6.3"
+  version: "0.7.0"
 ---
 
 # ACP Workers
 
-Host 只做规划、派发、验收。执行面是**一个**常驻 WebSocket（`48190`，一把 secret），底下挂多个 agent 进程。所有操作走 `acpw`，每条命令一行 JSON。
+Host 只做规划、派发、验收。执行面是**一个**常驻 WebSocket（`48190`，一把 secret），底下挂多个 agent 进程。所有操作走 `acpw`。默认输出 markdown；要整份字段加 `--json`，或 `acpw output set json` 持久化。
 
 `acpw up` 起这个 socket；`acpw run NAME` 在上面开或续一段会话，返回 `session_id`；下次带 `--session-id` 就能续。`acpw run` 在 socket 还没起时会自己起一份。独立 gateway / `grok agent serve` 只在 `--no-pool` 时出现。见 [references/pool.md](references/pool.md)。
 
@@ -55,7 +55,7 @@ bash scripts/ensure-acpw.sh
 acpw doctor && acpw ls
 ```
 
-`ls` 里的 `pool.live` 和 worker 的 `via: pool` 才是原生路径。每个 worker 自己的端口空着是正常的。
+`ls` 里 `## pool` 的 `live: true` 和 workers 表的 `via` 为 `pool` 才是原生路径。每个 worker 自己的端口空着是正常的。
 
 ### 步骤 2：起 socket
 
@@ -95,13 +95,14 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | `pool up` / `pool down` / `pool ls` | 与 `up` / `down` / `ls` 的 pool 字段同义，留给脚本 |
 | `add` / `rm` | 登记、注销 URL |
 | `lang` | `acpw lang set zh-CN` 写入配置；`acpw lang` / `lang get` 查看。一次调用用 `--lang` |
+| `output` | 默认 markdown。`acpw output set json` 写入配置；一次调用用 `--json` 或 `--format` |
 | `install` / `uninstall` | bash 补全；`--purge` 再停 worker 并删 registry/state |
 
 ## 验收清单
 
 - [ ] `acpw selfcheck` 的 `failed` 为空（装完自动跑过一次）
-- [ ] `acpw ls` 的 `pool.live` 为真，或 `run` 自己拉起过 socket
-- [ ] 续会话时用的是上次 JSON 里的 `session_id`
+- [ ] `acpw ls` 的 `## pool` 里 `live: true`，或 `run` 自己拉起过 socket
+- [ ] 续会话时用的是上次输出里的 `session_id`
 - [ ] `acpw run` 返回的 `stop_reason` 不是 `cancelled`
 - [ ] Host 自己看过 diff
 - [ ] Host 自己跑过测试并贴出真实结果

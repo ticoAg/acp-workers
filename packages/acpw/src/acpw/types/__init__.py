@@ -3,6 +3,7 @@ from acpw.types.doctor import DoctorAdapter, DoctorResponse
 from acpw.types.error import ErrorResponse
 from acpw.types.install import InstallResponse, UninstallResponse
 from acpw.types.lang import LangResponse
+from acpw.types.output import OutputResponse
 from acpw.types.pool import PoolStartResponse, PoolStatus, PoolStopResponse, PoolWorker
 from acpw.types.probe import ListeningHit, ProbeResult
 from acpw.types.registry import (
@@ -35,6 +36,7 @@ __all__ = [
     "InstallResponse",
     "LangResponse",
     "ListeningHit",
+    "OutputResponse",
     "PingResponse",
     "PoolStartResponse",
     "PoolStatus",

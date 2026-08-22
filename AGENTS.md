@@ -36,7 +36,7 @@ skills.sh.json           # skills.sh 分组清单
 ## CLI 约定（`packages/acpw`）
 
 - 类型放在 `src/acpw/types/`（Pydantic SSOT）。业务代码从 `acpw.types` 导入，不要走深路径。
-- CLI 不输出说明文字。每条命令一个 `BaseModel`，用 `model_dump_json()` 序列化。
+- CLI 不输出说明文字。每条命令一个 `BaseModel`。默认渲染成 markdown（标题、表格、`key: value`）；`--json` / `--format json` / `ACPW_OUTPUT=json` / `acpw output set json` 才 `model_dump_json()`。字段名保持英文。
 - Adapter 默认值（二进制、`stdio_argv`、默认 bind）放在 `src/acpw/adapters.py`。
 - 包不得按仓库相对路径解析文件；`references/` 和 `assets/` 是 skill 载荷，不是运行时数据。
 - 增删或改名一条命令，必须同步改 `SKILL.md` 里的命令表。

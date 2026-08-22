@@ -6,6 +6,12 @@
 
 ## [未发布]
 
+## [0.7.0] - 2026-08-22
+
+### 变更
+
+- CLI 默认输出 markdown（标题、表格、`key: value`），不再默认打一行 JSON。`--json`、`--format json`、`ACPW_OUTPUT=json`，或 `acpw output set json` 仍输出原来的 JSON 对象。字段名保持英文。`acpw run` 的 agent 正文写在元数据下面、以 `---` 分隔。
+
 ## [0.6.3] - 2026-08-22
 
 ### 新增
@@ -110,7 +116,8 @@
 - `acp-workers` skill：派发流程、线路协议参考、安装参考、registry 示例。
 - `scripts/ensure-acpw.sh`：幂等 CLI 引导，带版本下限、`--update`、`--force`、`--completion`。
 
-[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.3...HEAD
+[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/ticoAg/acp-workers/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/ticoAg/acp-workers/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/ticoAg/acp-workers/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ticoAg/acp-workers/compare/v0.6.0...v0.6.1

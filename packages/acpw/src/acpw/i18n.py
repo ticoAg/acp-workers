@@ -200,17 +200,20 @@ def bootstrap(flag: str | None) -> None:
         return
     lang = normalize(flag)
     if lang is None:
+        from acpw.output import dumps
         from acpw.types import ErrorResponse
 
         sys.stdout.write(
-            ErrorResponse(
-                error=t(
-                    "unsupported language {value}; choose {supported}",
-                    value=flag,
-                    supported=", ".join(SUPPORTED),
-                ),
-                known=list(SUPPORTED),
-            ).model_dump_json()
+            dumps(
+                ErrorResponse(
+                    error=t(
+                        "unsupported language {value}; choose {supported}",
+                        value=flag,
+                        supported=", ".join(SUPPORTED),
+                    ),
+                    known=list(SUPPORTED),
+                )
+            )
             + "\n"
         )
         raise SystemExit(1)

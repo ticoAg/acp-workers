@@ -13,7 +13,7 @@ acpw run grok -f /tmp/next.txt --session-id <session_id>
 acpw down
 ```
 
-每条命令打印一行 JSON。`ok` 表示 ACP 回合结束，不表示任务做对。
+默认打印 markdown。脚本要 JSON 时加 `--json`，或 `acpw output set json`。`ok` 表示 ACP 回合结束，不表示任务做对。
 
 `--help` 和 CLI 提示支持 `en-US`、`zh-CN`、`zh-TW`：
 
@@ -23,7 +23,7 @@ acpw lang set zh-CN      # 写入 ~/.config/acp-workers/config.json
 acpw lang                # 查看当前语言
 ```
 
-一次调用还可用 `ACPW_LANG`。字段名仍是英文。
+一次调用还可用 `ACPW_LANG`。输出格式还可用 `ACPW_OUTPUT` / `--format`。字段名仍是英文。
 
 原生模式是 `48190` 上的一条 WebSocket，底下挂多个 agent 进程。`acpw up` 起它；`acpw run NAME` 开或续一段会话；`acpw down NAME` 停一个 child；`acpw down` 停这条 socket。Pool 里的 grok 是 `grok agent --always-approve --no-leader stdio`。`--no-pool` 是独立 gateway / `grok agent serve` 逃生口。线路契约见 [`docs/pool-protocol.md`](../../docs/pool-protocol.md)。
 

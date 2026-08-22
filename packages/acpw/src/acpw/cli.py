@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from pydantic import BaseModel
 from typer.core import TyperGroup
 
 from acpw import __version__
+from acpw import output as out
 from acpw.adapters import ADAPTERS, resolve_stdio_argv
 from acpw.daemon import run_daemon
 from acpw.gateway import run_gateway
@@ -42,6 +42,7 @@ from acpw.types import (
     ErrorResponse,
     ExecParams,
     LangResponse,
+    OutputResponse,
     VersionResponse,
     WorkerCreateParams,
 )
@@ -50,7 +51,9 @@ from acpw.types import (
 class LocaleGroup(TyperGroup):
     def main(self, args: Any = None, **kwargs: Any) -> Any:
         argv = list(args) if args is not None else sys.argv[1:]
-        flag, stripped = strip_lang(argv)
+        fmt, stripped = out.strip_output(argv)
+        flag, stripped = strip_lang(stripped)
+        out.bootstrap_output(fmt)
         bootstrap(flag)
         return super().main(args=stripped, **kwargs)
 
@@ -65,16 +68,10 @@ app = typer.Typer(
 )
 
 
-def emit(model: BaseModel, *, code: int = 0) -> None:
-    typer.echo(model.model_dump_json())
-    if code:
-        raise typer.Exit(code)
-
-
 def fail(exc: Exception) -> None:
     if isinstance(exc, AcpwError):
-        emit(exc.payload, code=1)
-    emit(ErrorResponse(error=str(exc)), code=1)
+        out.emit(exc.payload, code=1)
+    out.emit(ErrorResponse(error=str(exc)), code=1)
 
 
 def poolable(name: str) -> bool:
@@ -120,7 +117,7 @@ def version_payload() -> VersionResponse:
 
 def version_option(value: bool) -> None:
     if value:
-        emit(version_payload())
+        out.emit(version_payload())
         raise typer.Exit()
 
 
@@ -144,6 +141,20 @@ def main(
             help="CLI help language. Overrides ACPW_LANG and the saved config.",
         ),
     ] = None,
+    _json: Annotated[
+        bool,
+        typer.Option("--json", help="Write JSON instead of markdown."),
+    ] = False,
+    _format: Annotated[
+        str | None,
+        typer.Option(
+            "--format",
+            help=(
+                "Output format: markdown (default) or json. "
+                "Overrides ACPW_OUTPUT and the saved config."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """One WebSocket, many agents. Host plans; workers execute."""
 
@@ -151,7 +162,7 @@ def main(
 @app.command("version")
 def cmd_version() -> None:
     """Print the installed acpw version."""
-    emit(version_payload())
+    out.emit(version_payload())
 
 
 @app.command("ls")
@@ -159,13 +170,13 @@ def cmd_version() -> None:
 @app.command("discover", hidden=True)
 def cmd_ls() -> None:
     """List workers and the shared WebSocket."""
-    emit(status())
+    out.emit(status())
 
 
 @app.command("doctor")
 def cmd_doctor() -> None:
     """Check adapter binaries on PATH."""
-    emit(doctor())
+    out.emit(doctor())
 
 
 @app.command("selfcheck")
@@ -177,7 +188,7 @@ def cmd_selfcheck(
 ) -> None:
     """Verify the installation end to end. Exits 1 if any check fails."""
     result = run_selfcheck(live=live)
-    emit(result, code=0 if result.ok else 1)
+    out.emit(result, code=0 if result.ok else 1)
 
 
 @app.command("add")
@@ -192,7 +203,7 @@ def cmd_add(
 ) -> None:
     """Register a worker or a manual websocket URL."""
     try:
-        emit(add(WorkerCreateParams(name=name, kind=kind, url=url, bind=bind)))
+        out.emit(add(WorkerCreateParams(name=name, kind=kind, url=url, bind=bind)))
     except Exception as exc:
         fail(exc)
 
@@ -201,7 +212,7 @@ def cmd_add(
 def cmd_rm(name: Annotated[str, typer.Argument(help="Registry name to unregister.")]) -> None:
     """Unregister a worker."""
     try:
-        emit(rm(name))
+        out.emit(rm(name))
     except Exception as exc:
         fail(exc)
 
@@ -230,7 +241,7 @@ def cmd_up(
     """Start the shared WebSocket, optionally pre-warming workers."""
     try:
         if pool:
-            emit(
+            out.emit(
                 pool_up(
                     workers=list(names) if names else None,
                     cwd=str(cwd) if cwd else None,
@@ -239,9 +250,9 @@ def cmd_up(
             )
             return
         if not names:
-            emit(ErrorResponse(error=t("--no-pool needs a worker name")), code=1)
+            out.emit(ErrorResponse(error=t("--no-pool needs a worker name")), code=1)
         for name in names:
-            emit(start(name, cwd=str(cwd) if cwd else None, timeout=timeout))
+            out.emit(start(name, cwd=str(cwd) if cwd else None, timeout=timeout))
     except Exception as exc:
         fail(exc)
 
@@ -265,13 +276,13 @@ def cmd_down(
     try:
         if not pool:
             if not name:
-                emit(ErrorResponse(error=t("--no-pool needs a worker name")), code=1)
-            emit(stop(name))
+                out.emit(ErrorResponse(error=t("--no-pool needs a worker name")), code=1)
+            out.emit(stop(name))
             return
         if name is None:
-            emit(pool_down())
+            out.emit(pool_down())
             return
-        emit(pool_stop_worker(name))
+        out.emit(pool_stop_worker(name))
     except Exception as exc:
         fail(exc)
 
@@ -287,7 +298,7 @@ def cmd_ping(
     """ACP initialize against a live worker."""
     try:
         via_pool = use_pool(name, url=None, choice=pool)
-        emit(pool_ping(name) if via_pool else ping(name))
+        out.emit(pool_ping(name) if via_pool else ping(name))
     except Exception as exc:
         fail(exc)
 
@@ -325,7 +336,7 @@ def cmd_run(
     if prompt_file:
         text = prompt_file.read_text(encoding="utf-8")
     if not (text or "").strip():
-        emit(ErrorResponse(error=t("empty prompt")), code=1)
+        out.emit(ErrorResponse(error=t("empty prompt")), code=1)
     params = ExecParams(
         name=name,
         prompt=text or "",
@@ -336,7 +347,7 @@ def cmd_run(
     )
     try:
         via_pool = use_pool(name, url=url, choice=pool)
-        emit(pool_run(params) if via_pool else run(params))
+        out.emit(pool_run(params) if via_pool else run(params))
     except Exception as exc:
         fail(exc)
 
@@ -344,7 +355,7 @@ def cmd_run(
 @app.command("install")
 def cmd_install() -> None:
     """Register bash completion for this user."""
-    emit(install_shell())
+    out.emit(install_shell())
 
 
 @app.command("uninstall")
@@ -354,12 +365,12 @@ def cmd_uninstall(
     ] = False,
 ) -> None:
     """Remove bash completion. Does not uninstall the uv tool or skill."""
-    emit(uninstall_shell(purge=purge))
+    out.emit(uninstall_shell(purge=purge))
 
 
 def emit_lang() -> None:
     state = current()
-    emit(
+    out.emit(
         LangResponse(
             lang=state.lang,
             saved=state.saved,
@@ -402,7 +413,7 @@ def cmd_lang_set(
     """Save the CLI language."""
     chosen = normalize(lang)
     if chosen is None:
-        emit(
+        out.emit(
             ErrorResponse(
                 error=t(
                     "unsupported language {value}; choose {supported}",
@@ -417,6 +428,68 @@ def cmd_lang_set(
     save_lang(chosen)
     apply(LangState(lang=chosen, source="config", saved=chosen))
     emit_lang()
+
+
+def emit_output() -> None:
+    state = out.current()
+    out.emit(
+        OutputResponse(
+            output=state.format,
+            saved=state.saved,
+            source=state.source,
+            supported=list(out.SUPPORTED),
+        )
+    )
+
+
+output_app = typer.Typer(
+    name="output",
+    help="Show or save the CLI output format.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+    pretty_exceptions_enable=False,
+)
+app.add_typer(output_app)
+
+
+@output_app.callback(invoke_without_command=True)
+def output_root(ctx: typer.Context) -> None:
+    """Show or save the CLI output format."""
+    if ctx.invoked_subcommand is None:
+        emit_output()
+
+
+@output_app.command("get")
+def cmd_output_get() -> None:
+    """Print the current CLI output format."""
+    emit_output()
+
+
+@output_app.command("set")
+def cmd_output_set(
+    fmt: Annotated[
+        str,
+        typer.Argument(help="Format to save: markdown or json."),
+    ],
+) -> None:
+    """Save the CLI output format."""
+    chosen = out.normalize(fmt)
+    if chosen is None:
+        out.emit(
+            ErrorResponse(
+                error=t(
+                    "unsupported output format {value}; choose {supported}",
+                    value=fmt,
+                    supported=", ".join(out.SUPPORTED),
+                ),
+                known=list(out.SUPPORTED),
+            ),
+            code=1,
+        )
+        return
+    out.save_output(chosen)
+    out.apply(out.OutputState(format=chosen, source="config", saved=chosen))
+    emit_output()
 
 
 pool_app = typer.Typer(
@@ -440,7 +513,7 @@ def cmd_pool_up(
 ) -> None:
     """Start the pool daemon if it is not live."""
     try:
-        emit(
+        out.emit(
             pool_up(
                 bind=bind,
                 workers=list(worker) if worker else None,
@@ -455,14 +528,14 @@ def cmd_pool_up(
 @pool_app.command("down")
 def cmd_pool_down() -> None:
     """Stop the pool daemon and every child it owns."""
-    emit(pool_down())
+    out.emit(pool_down())
 
 
 @pool_app.command("ls")
 @pool_app.command("status", hidden=True)
 def cmd_pool_ls() -> None:
     """Pool liveness, children, and session counts."""
-    emit(pool_status())
+    out.emit(pool_status())
 
 
 @app.command("daemon", hidden=True)

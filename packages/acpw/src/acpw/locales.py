@@ -59,6 +59,10 @@ ZH_CN: dict[str, str] = {
     "CLI help language. Overrides ACPW_LANG and the saved config.": (
         "CLI 帮助语言。覆盖 ACPW_LANG 和已保存的配置。"
     ),
+    "Write JSON instead of markdown.": "输出 JSON，而不是 markdown。",
+    "Output format: markdown (default) or json. Overrides ACPW_OUTPUT and the saved config.": (
+        "输出格式：markdown（默认）或 json。覆盖 ACPW_OUTPUT 和已保存的配置。"
+    ),
     "Print the installed acpw version.": "打印已安装的 acpw 版本。",
     "List workers and the shared WebSocket.": "列出 worker 和共享 WebSocket。",
     "Check adapter binaries on PATH.": "检查 PATH 上的适配器二进制。",
@@ -121,6 +125,10 @@ ZH_CN: dict[str, str] = {
     "Print the current CLI language.": "打印当前 CLI 语言。",
     "Save the CLI language.": "保存 CLI 语言。",
     "Language to save: zh-CN, en-US, or zh-TW.": ("要保存的语言：zh-CN、en-US 或 zh-TW。"),
+    "Show or save the CLI output format.": "查看或保存 CLI 输出格式。",
+    "Print the current CLI output format.": "打印当前 CLI 输出格式。",
+    "Save the CLI output format.": "保存 CLI 输出格式。",
+    "Format to save: markdown or json.": "要保存的格式：markdown 或 json。",
     "One resident daemon, one port, many children.": ("一个常驻 daemon，一个端口，多个 child。"),
     "Start the pool daemon if it is not live.": "若 pool daemon 未在运行则启动它。",
     "Bind host:port for the pool daemon.": "pool daemon 的 bind host:port。",
@@ -173,6 +181,9 @@ ZH_CN: dict[str, str] = {
     "unknown session {session_id}": "未知 session {session_id}",
     "cannot resume session {session_id}: {message}": ("无法续 session {session_id}: {message}"),
     "unsupported language {value}; choose {supported}": ("不支持的语言 {value}；可选 {supported}"),
+    "unsupported output format {value}; choose {supported}": (
+        "不支持的输出格式 {value}；可选 {supported}"
+    ),
     # install
     "acpw not on PATH; run: uv tool install --editable <this-repo>": (
         "PATH 上找不到 acpw；运行: uv tool install --editable <this-repo>"
@@ -277,6 +288,10 @@ ZH_TW: dict[str, str] = {
     "CLI help language. Overrides ACPW_LANG and the saved config.": (
         "CLI 說明語言。覆蓋 ACPW_LANG 與已儲存的設定。"
     ),
+    "Write JSON instead of markdown.": "輸出 JSON，而不是 markdown。",
+    "Output format: markdown (default) or json. Overrides ACPW_OUTPUT and the saved config.": (
+        "輸出格式：markdown（預設）或 json。覆蓋 ACPW_OUTPUT 與已儲存的設定。"
+    ),
     "Print the installed acpw version.": "列印已安裝的 acpw 版本。",
     "List workers and the shared WebSocket.": "列出 worker 與共享 WebSocket。",
     "Check adapter binaries on PATH.": "檢查 PATH 上的轉接器二進位檔。",
@@ -339,6 +354,10 @@ ZH_TW: dict[str, str] = {
     "Print the current CLI language.": "列印目前 CLI 語言。",
     "Save the CLI language.": "儲存 CLI 語言。",
     "Language to save: zh-CN, en-US, or zh-TW.": ("要儲存的語言：zh-CN、en-US 或 zh-TW。"),
+    "Show or save the CLI output format.": "查看或儲存 CLI 輸出格式。",
+    "Print the current CLI output format.": "列印目前 CLI 輸出格式。",
+    "Save the CLI output format.": "儲存 CLI 輸出格式。",
+    "Format to save: markdown or json.": "要儲存的格式：markdown 或 json。",
     "One resident daemon, one port, many children.": ("一個常駐 daemon，一個埠，多個 child。"),
     "Start the pool daemon if it is not live.": "若 pool daemon 未在執行則啟動它。",
     "Bind host:port for the pool daemon.": "pool daemon 的 bind host:port。",
@@ -390,6 +409,9 @@ ZH_TW: dict[str, str] = {
     "unknown session {session_id}": "未知 session {session_id}",
     "cannot resume session {session_id}: {message}": ("無法續 session {session_id}: {message}"),
     "unsupported language {value}; choose {supported}": ("不支援的語言 {value}；可選 {supported}"),
+    "unsupported output format {value}; choose {supported}": (
+        "不支援的輸出格式 {value}；可選 {supported}"
+    ),
     "acpw not on PATH; run: uv tool install --editable <this-repo>": (
         "PATH 上找不到 acpw；執行: uv tool install --editable <this-repo>"
     ),
