@@ -8,7 +8,7 @@ import typer
 from pydantic import BaseModel
 
 from acpw.gateway import run_gateway
-from acpw.install import install_shell
+from acpw.install import install_shell, uninstall_shell
 from acpw.registry import AcpwError
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
 from acpw.types import ErrorResponse, ExecParams, WorkerCreateParams
@@ -139,6 +139,14 @@ def cmd_run(
 def cmd_install() -> None:
     """Register bash completion for this user."""
     emit(install_shell())
+
+
+@app.command("uninstall")
+def cmd_uninstall(
+    purge: Annotated[bool, typer.Option(help="also stop workers and delete registry/state")] = False,
+) -> None:
+    """Remove bash completion. Does not uninstall the uv tool or skill."""
+    emit(uninstall_shell(purge=purge))
 
 
 @app.command("gateway", hidden=True)

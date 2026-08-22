@@ -4,7 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
-from acpw.types import InstallResponse
+from acpw.types import InstallResponse, UninstallResponse
 
 MARKER = "# acpw bash completion"
 COMPLETION_DIR = Path.home() / ".local" / "share" / "bash-completion" / "completions"
@@ -46,3 +46,58 @@ def install_shell() -> InstallResponse:
     if local_bin not in path.split(":"):
         notes.append(f"add {local_bin} to PATH")
     return InstallResponse(acpw=acpw, completion=str(completion_path), bashrc_updated=updated, notes=notes)
+
+
+def strip_bashrc_marker(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == MARKER:
+            i += 1
+            if i < len(lines) and "bash-completion/completions/acpw" in lines[i]:
+                i += 1
+            if i < len(lines) and lines[i].strip() == "":
+                i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    return "".join(out)
+
+
+def uninstall_shell(*, purge: bool = False) -> UninstallResponse:
+    notes: list[str] = []
+    completion_path = COMPLETION_DIR / "acpw"
+    completion_removed = False
+    if completion_path.exists():
+        completion_path.unlink()
+        completion_removed = True
+    bashrc = Path.home() / ".bashrc"
+    bashrc_updated = False
+    if bashrc.exists():
+        original = bashrc.read_text(encoding="utf-8")
+        stripped = strip_bashrc_marker(original)
+        if stripped != original:
+            bashrc.write_text(stripped, encoding="utf-8")
+            bashrc_updated = True
+    purged = False
+    if purge:
+        from acpw.paths import CONFIG_DIR, STATE_DIR
+        from acpw.registry import load_registry
+        from acpw.service import stop
+
+        for name in list(load_registry().workers):
+            stop(name)
+        for path in (CONFIG_DIR, STATE_DIR):
+            if path.exists():
+                shutil.rmtree(path)
+        purged = True
+        notes.append("removed ~/.config/acp-workers and ~/.local/state/acp-workers")
+    notes.append("CLI still on PATH until: uv tool uninstall acpw")
+    notes.append("skill symlink: rm ~/.agents/skills/acp-workers  (or npx skills remove acp-workers -g)")
+    return UninstallResponse(
+        completion_removed=completion_removed,
+        bashrc_updated=bashrc_updated,
+        purged=purged,
+        notes=notes,
+    )

@@ -7,3 +7,11 @@ class InstallResponse(BaseModel):
     completion: str | None = None
     bashrc_updated: bool = False
     notes: list[str] = Field(default_factory=list)
+
+
+class UninstallResponse(BaseModel):
+    ok: bool = True
+    completion_removed: bool = False
+    bashrc_updated: bool = False
+    purged: bool = False
+    notes: list[str] = Field(default_factory=list)

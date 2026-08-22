@@ -6,41 +6,19 @@ The **host** agent plans and verifies. **Workers** (Grok, Claude Code, Codex, Cu
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
-## Install
+Install, use, and uninstall procedures live in [`SKILL.md`](SKILL.md) (the copy agents load). Short version:
 
 ```bash
-# skill (Claude / Cursor / Codex / Grok / …)
 npx skills add ticoAg/acp-workers -g -y
-
-# CLI
 uv tool install git+https://github.com/ticoAg/acp-workers
-acpw install    # bash completion
-```
-
-From a checkout:
-
-```bash
-uv tool install --editable .
 acpw install
+acpw ls && acpw up grok && acpw run grok -f task.txt
+acpw uninstall --purge
+uv tool uninstall acpw
+npx skills remove acp-workers -g
 ```
 
-## Usage
-
-```bash
-acpw ls
-acpw up grok
-acpw ping grok
-acpw run grok -f task.txt
-acpw down grok
-```
-
-Default loopback ports: grok `48191`, claude `48192`, codex `48193`, cursor `48194`.
-
-Manual URL:
-
-```bash
-acpw add lab --url 'ws://127.0.0.1:48191/ws?server-key=SECRET'
-```
+From a checkout: `uv tool install --editable .` then `acpw install`.
 
 ## skills.sh layout
 

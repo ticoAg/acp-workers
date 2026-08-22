@@ -1,7 +1,7 @@
 from acpw.types.adapter import Adapter
 from acpw.types.doctor import DoctorAdapter, DoctorResponse
 from acpw.types.error import ErrorResponse
-from acpw.types.install import InstallResponse
+from acpw.types.install import InstallResponse, UninstallResponse
 from acpw.types.probe import ListeningHit, ProbeResult
 from acpw.types.registry import (
     Registry,
@@ -34,6 +34,7 @@ __all__ = [
     "Registry",
     "ToolCallOut",
     "TransportKind",
+    "UninstallResponse",
     "Worker",
     "WorkerCreateParams",
     "WorkerDeleted",

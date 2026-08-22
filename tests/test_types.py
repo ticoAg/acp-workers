@@ -1,3 +1,4 @@
+from acpw.install import MARKER, strip_bashrc_marker
 from acpw.types import Adapter, ExecResponse, Registry, Worker, WorkerStatusList
 
 
@@ -26,3 +27,9 @@ def test_adapter_defaults() -> None:
         processes={},
     )
     assert dumped.ok is True
+
+
+def test_strip_bashrc_marker() -> None:
+    block = f'{MARKER}\n[ -f "/tmp/acpw" ] && . "/tmp/bash-completion/completions/acpw"\n\n'
+    text = f"# start\n{block}# end\n"
+    assert strip_bashrc_marker(text) == "# start\n# end\n"

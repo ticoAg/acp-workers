@@ -10,21 +10,38 @@ metadata:
 
 # ACP Workers
 
-主 agent 只规划、派发、验收。执行面是本机常驻 ACP WebSocket worker。一律用短命令 `acpw`，一行 JSON。
+主 agent 只规划、派发、验收。执行面是本机常驻 ACP WebSocket worker。一律用短命令 `acpw`，一行 JSON。`SKILL_DIR` 是本 skill 目录。
+
+## Install
+
+Skill 和 CLI 分开装。Host 缺 `acpw` 时先装 CLI。
+
+**Skill（给各 agent 扫到 SKILL.md）**
 
 ```bash
-uv tool install --editable "$SKILL_DIR"   # 一次
-acpw install                              # bash 补全
-acpw ls
-acpw up grok
-acpw ping grok
-acpw run grok -f /tmp/task.txt
-acpw down grok
+# GitHub / skills.sh（仓库公开后）
+npx skills add ticoAg/acp-workers -g -y
+
+# 本机总库（已经在这儿时）
+ln -sfn ~/.agents/skill-library/acp-workers ~/.agents/skills/acp-workers
 ```
 
-`SKILL_DIR` 是本 skill 目录。已安装则直接 `acpw`。
+**CLI**
 
-## Roles
+```bash
+# 从本目录
+uv tool install --editable "$SKILL_DIR"
+# 从 GitHub
+uv tool install git+https://github.com/ticoAg/acp-workers
+
+acpw install    # bash 补全 → ~/.local/share/bash-completion/completions/acpw 并写入 ~/.bashrc
+```
+
+`~/.local/bin` 要在 PATH。新开一个 shell 后 `command -v acpw`。
+
+## Use
+
+### Roles
 
 | 词 | 含义 |
 | --- | --- |
@@ -35,7 +52,7 @@ acpw down grok
 
 默认口（高位）：grok `48191`，claude `48192`，codex `48193`，cursor `48194`。
 
-## Workflow
+### Workflow
 
 1. `acpw doctor` 然后 `acpw ls`。`live` 且 `probe` 为 `health`/`ws-401`/`ws-auth` 才可派。
 2. 已有 serve：`acpw add NAME --url 'ws://127.0.0.1:PORT/ws?server-key=…'`
@@ -52,8 +69,25 @@ acpw down grok
 | `ping` / `run` | 握手 / 派活（`-p` 或 `-f`） |
 | `add` / `rm` | 登记 URL |
 | `install` | bash 补全 |
+| `uninstall` | 去掉补全；`--purge` 再停 worker 并删 registry/state |
 
 别名：`status`=`ls`，`start`=`up`，`exec`=`run`。
+
+## Uninstall
+
+顺序：先停 worker，再卸 CLI/补全，最后卸 skill。
+
+```bash
+acpw down grok          # 每个 live worker 停一次
+acpw uninstall          # 补全文件 + ~/.bashrc 标记
+acpw uninstall --purge  # 上一项 + 停全部已登记 worker + 删 ~/.config/acp-workers 与 ~/.local/state/acp-workers
+uv tool uninstall acpw
+npx skills remove acp-workers -g
+# 若是本机软链：
+rm ~/.agents/skills/acp-workers
+```
+
+`uninstall` 不会卸掉 `uv tool` 里的 `acpw` 二进制，最后一步必须 `uv tool uninstall acpw`。
 
 ## Pitfalls
 
