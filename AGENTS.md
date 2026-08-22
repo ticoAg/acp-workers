@@ -1,64 +1,64 @@
 # AGENTS.md
 
-Guidance for AI coding agents working **on this repository**. To *use* the skill instead, read [skills/acp-workers/SKILL.md](skills/acp-workers/SKILL.md).
+给在**本仓库上工作**的 AI 编码 agent 看的约定。若要*使用* skill，读 [skills/acp-workers/SKILL.md](skills/acp-workers/SKILL.md)。
 
-## Repository Overview
+## 仓库概览
 
-Two artifacts from one tree: the `acp-workers` skill (instructions agents load) and the `acpw` CLI (the Python package those instructions drive). They ship separately — a user can install one without the other — so neither may depend on the other's location on disk.
+同一棵树里两份产物：`acp-workers` skill（agent 加载的指令）和 `acpw` CLI（这些指令驱动的 Python 包）。它们分开发布——用户可以只装其中一份——所以任何一方都不得依赖另一方在磁盘上的位置。
 
-## Layout
+## 布局
 
 ```
-skills/{skill-name}/     # kebab-case; one directory per skill
-  SKILL.md               # required
-  AGENTS.md              # cross-agent entry point, points at SKILL.md
-  README.md              # human-facing
-  metadata.json          # version, organization, abstract, references
-  scripts/               # executables that ship with the skill
-  references/            # loaded on demand, one level deep from SKILL.md
-  assets/                # example data files
-packages/{package}/      # code, tests, and lockfile
-docs/                    # contracts for people changing the code, not skill payload
-skills.sh.json           # skills.sh grouping manifest
+skills/{skill-name}/     # kebab-case；每个 skill 一个目录
+  SKILL.md               # 必填
+  AGENTS.md              # 跨 agent 入口，指向 SKILL.md
+  README.md              # 给人看
+  metadata.json          # version、organization、abstract、references
+  scripts/               # 随 skill 下发的可执行文件
+  references/            # 按需加载，相对 SKILL.md 只深一层
+  assets/                # 示例数据
+packages/{package}/      # 代码、测试、lockfile
+docs/                    # 改代码的人看的契约，不是 skill 载荷
+skills.sh.json           # skills.sh 分组清单
 .github/workflows/       # CI
 ```
 
-## Skill Conventions
+## Skill 约定
 
-- `name` in the SKILL.md frontmatter must equal the directory name.
-- Keep `SKILL.md` under 500 lines. Anything rare or long goes to `references/` and is linked, not inlined.
-- The description is the router: lead with the action, then `USE FOR:` triggers and `DO NOT USE FOR:` exclusions naming the sibling skill that owns them.
-- Adding a skill means adding it to `skills.sh.json` as well.
-- `npx skills add` copies the skill directory — `SKILL.md`, `AGENTS.md`, `README.md`, `references/`, `scripts/`, `assets/`, executable bits intact. `metadata.json` is consumed by the installer and does not land on disk, so nothing may depend on it at runtime. Nothing outside `skills/<name>/` ships at all.
-- Frontmatter is parsed as YAML by the installer. Quote any scalar containing `: `, or the skill is silently skipped with "No skills found".
-- Scripts: `#!/bin/bash` with `set -euo pipefail`, executable bit set, kebab-case name. Progress goes to stderr, one machine-readable JSON line to stdout. Make them idempotent — an agent may run them on every invocation.
+- SKILL.md frontmatter 里的 `name` 必须等于目录名。
+- `SKILL.md` 控制在 500 行以内。少见或很长的内容放到 `references/`，用链接，不要内联。
+- `description` 是路由器：先写动作，再写 `USE FOR:` 触发词，以及 `DO NOT USE FOR:` 排除项（点名真正负责那件事的兄弟 skill）。
+- 新增 skill 也要写进 `skills.sh.json`。
+- `npx skills add` 只复制 skill 目录——`SKILL.md`、`AGENTS.md`、`README.md`、`references/`、`scripts/`、`assets/`，可执行位原样保留。`metadata.json` 给安装器消费，不会落到磁盘，运行时不得依赖它。`skills/<name>/` 以外的任何东西都不会随 skill 下发。
+- 安装器按 YAML 解析 frontmatter。标量里含 `: ` 必须加引号，否则 skill 会被静默跳过，报 "No skills found"。
+- 脚本：`#!/bin/bash` 加 `set -euo pipefail`，可执行位打开，文件名 kebab-case。进度写 stderr，stdout 只打一行机器可读 JSON。必须幂等——agent 每次调用都可能再跑一遍。
 
-## CLI Conventions (`packages/acpw`)
+## CLI 约定（`packages/acpw`）
 
-- Types live in `src/acpw/types/` (Pydantic SSOT). Business code imports from `acpw.types`, never deep paths.
-- The CLI never prints prose. One `BaseModel` per command, serialized with `model_dump_json()`.
-- Adapter defaults (binary, `stdio_argv`, default bind) live in `src/acpw/adapters.py`.
-- The package must not resolve paths relative to the repository; `references/` and `assets/` are skill payload, not runtime data.
-- Adding or renaming a command means updating the command table in `SKILL.md` too.
-- Native mode is one WebSocket: `acpw up` starts the pool daemon, `acpw up NAME…` pre-warms children, `acpw down NAME` stops one child, `acpw down` stops the daemon. `acpw run` / `acpw ping` start that daemon when none is live. `--no-pool` is the standalone gateway / serve escape hatch; `--url` also bypasses the pool.
-- The pool daemon answers to [`docs/pool-protocol.md`](docs/pool-protocol.md). Change one and change the other in the same commit; the daemon is the only thing a host talks to, and a host cannot see which child it reached.
-- Ids never cross: host ids, child ids, and session ids are three separate spaces the daemon translates between. Children choose their own session ids and two of them can pick the same string, so nothing may key a table on a child-supplied id.
-- Tests must not touch a real registry. Set `ACPW_CONFIG_DIR` and `ACPW_STATE_DIR`, and take ports from `free_port()` rather than the defaults.
+- 类型放在 `src/acpw/types/`（Pydantic SSOT）。业务代码从 `acpw.types` 导入，不要走深路径。
+- CLI 不输出说明文字。每条命令一个 `BaseModel`，用 `model_dump_json()` 序列化。
+- Adapter 默认值（二进制、`stdio_argv`、默认 bind）放在 `src/acpw/adapters.py`。
+- 包不得按仓库相对路径解析文件；`references/` 和 `assets/` 是 skill 载荷，不是运行时数据。
+- 增删或改名一条命令，必须同步改 `SKILL.md` 里的命令表。
+- 原生模式是一条 WebSocket：`acpw up` 起 pool daemon，`acpw up NAME…` 预热 children，`acpw down NAME` 停一个 child，`acpw down` 停 daemon。`acpw run` / `acpw ping` 在没有 live daemon 时会自己起一份。`--no-pool` 是独立 gateway / serve 逃生口；`--url` 同样绕开 pool。
+- Pool daemon 遵守 [`docs/pool-protocol.md`](docs/pool-protocol.md)。改一处必须同一提交改另一处；host 只跟 daemon 说话，看不到自己打到了哪个 child。
+- Id 互不串台：host id、child id、session id 是 daemon 翻译的三套空间。Children 自己选 session id，两个 child 可以选出同一字符串，所以任何表都不得拿 child 提供的 id 当键。
+- 测试不得碰真实 registry。设置 `ACPW_CONFIG_DIR` 和 `ACPW_STATE_DIR`，端口用 `free_port()`，不要用默认端口。
 
-## Releasing
+## 发布
 
-The skill and the CLI share one version number. A release bumps all of these together:
+Skill 和 CLI 共用一个版本号。发版时下列文件一起 bump：
 
-| File | Field |
+| 文件 | 字段 |
 | --- | --- |
 | `packages/acpw/pyproject.toml` | `version` |
 | `skills/acp-workers/metadata.json` | `version` |
-| `skills/acp-workers/SKILL.md` | `metadata.version` in the frontmatter |
-| `CHANGELOG.md` | move `Unreleased` entries under the new version |
+| `skills/acp-workers/SKILL.md` | frontmatter 里的 `metadata.version` |
+| `CHANGELOG.md` | 把 `未发布` 条目移到新版本下 |
 
-`__version__` is read from installed package metadata, so it needs no edit. Raise `required_version` in `skills/acp-workers/scripts/ensure-acpw.sh` only when the skill's instructions start depending on a newer CLI; CI rejects a floor above the released version. Tag as `vX.Y.Z` so the CHANGELOG links resolve.
+`__version__` 从已安装包的元数据读取，不必改。只有 skill 指令开始依赖更新的 CLI 时，才提高 `skills/acp-workers/scripts/ensure-acpw.sh` 里的 `required_version`；CI 会拒绝下限高于已发布版本。Tag 用 `vX.Y.Z`，这样 CHANGELOG 的链接才能解析。
 
-## Before Pushing
+## 推送前
 
 ```bash
 cd packages/acpw && uv run ruff check . && uv run ruff format --check . && uv run pytest

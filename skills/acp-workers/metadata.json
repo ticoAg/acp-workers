@@ -1,8 +1,8 @@
 {
   "version": "0.6.0",
   "organization": "ticoAg",
-  "date": "August 2026",
-  "abstract": "Dispatches coding work over one resident WebSocket that owns many agent processes (Grok, Claude, Codex, Cursor) through the acpw CLI. acpw up starts that socket; acpw run returns a session_id that continues the conversation across connections, child respawns, and daemon restarts when the agent advertises loadSession. The host agent keeps planning, scoping, and verification; workers only execute. Every command prints one JSON line, and an ok result means the ACP turn ended, not that the task is correct.",
+  "date": "2026年8月",
+  "abstract": "通过一条常驻 WebSocket，用 acpw CLI 把编码任务派给多个 agent 进程（Grok、Claude、Codex、Cursor）。acpw up 起这条 socket；acpw run 返回 session_id，在 agent 广告 loadSession 时，可跨连接、child 重启、daemon 重启续对话。Host 负责规划、限定范围和验收；worker 只执行。每条命令打印一行 JSON；ok 只表示 ACP 回合结束，不表示任务做对。",
   "references": [
     "https://agentclientprotocol.com",
     "https://agentskills.io/specification",

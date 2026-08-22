@@ -1,32 +1,32 @@
 # acp-workers
 
-Cross-agent entry point for the ACP Workers skill. The full procedure is in [SKILL.md](./SKILL.md).
+ACP Workers skill 的跨 agent 入口。完整流程见 [SKILL.md](./SKILL.md)。
 
-Use this skill when the user asks to hand a coding task to grok / claude / codex / cursor, to start one WebSocket that owns many agents (`acpw up`), or to resume a conversation with a `session_id`.
+用户要把编码任务交给 grok / claude / codex / cursor、起一条底下挂多个 agent 的 WebSocket（`acpw up`）、或用 `session_id` 续对话时，使用本 skill。
 
-Do not use it for grok TUI consultation or debate, MCP server configuration, `grok -p`, or running `grok agent stdio` by hand in a tty.
+不要用于 grok TUI 咨询或辩论、MCP server 配置、`grok -p`，或在 tty 里手工跑 `grok agent stdio`。
 
-## Requirements
+## 要求
 
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/)
-- The `acpw` CLI on `PATH` — run `bash scripts/ensure-acpw.sh`, details in [references/install.md](./references/install.md)
-- At least one agent binary the adapters can reach: `grok`, `npx`, or `cursor-agent`
+- Python 3.12+ 和 [uv](https://docs.astral.sh/uv/)
+- `PATH` 上有 `acpw` CLI —— 跑 `bash scripts/ensure-acpw.sh`，细节见 [references/install.md](./references/install.md)
+- 至少一个 adapter 能碰到的 agent 二进制：`grok`、`npx` 或 `cursor-agent`
 
-## Procedure
+## 流程
 
-1. Read [SKILL.md](./SKILL.md).
-2. `bash scripts/ensure-acpw.sh`, then `acpw doctor && acpw ls`. Native path is `pool.live` / `via: pool`.
-3. `acpw up` starts the shared WebSocket; `acpw run NAME` starts it if needed and returns a `session_id`. Pass `--session-id` to continue. `--no-pool` is the standalone gateway / serve escape hatch. See [references/pool.md](./references/pool.md).
-4. Write one acceptance-shaped task, dispatch with `acpw run`.
-5. Verify yourself: read the diff, run the tests. A worker's report is not evidence.
+1. 读 [SKILL.md](./SKILL.md)。
+2. `bash scripts/ensure-acpw.sh`，然后 `acpw doctor && acpw ls`。原生路径是 `pool.live` / `via: pool`。
+3. `acpw up` 起共享 WebSocket；`acpw run NAME` 在需要时会自己起，并返回 `session_id`。续会话带 `--session-id`。`--no-pool` 是独立 gateway / serve 逃生口。见 [references/pool.md](./references/pool.md)。
+4. 写一件可验收的任务，用 `acpw run` 派发。
+5. 自己验收：看 diff、跑测试。Worker 的报告不是证据。
 
-## Install
+## 安装
 
 ```bash
 npx skills add ticoAg/acp-workers --skill acp-workers
 ```
 
-Manual project install:
+手动装进项目：
 
 ```bash
 mkdir -p .agents/skills

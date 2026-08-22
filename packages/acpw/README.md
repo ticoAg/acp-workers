@@ -1,6 +1,6 @@
 # acpw
 
-CLI for resident [ACP](https://agentclientprotocol.com) workers. A host agent plans and verifies; workers execute over a WebSocket on this machine.
+本机常驻 [ACP](https://agentclientprotocol.com) worker 的 CLI。Host agent 规划和验收；worker 通过本机 WebSocket 执行。
 
 ```bash
 uv tool install "git+https://github.com/ticoAg/acp-workers#subdirectory=packages/acpw"
@@ -13,13 +13,13 @@ acpw run grok -f /tmp/next.txt --session-id <session_id>
 acpw down
 ```
 
-Every command prints one JSON line. `ok` means the ACP turn ended, not that the task is correct.
+每条命令打印一行 JSON。`ok` 表示 ACP 回合结束，不表示任务做对。
 
-Native mode is one WebSocket on `48190` that owns many agent processes. `acpw up` starts it; `acpw run NAME` opens or resumes a session; `acpw down NAME` stops one child; `acpw down` stops the socket. Grok in the pool is `grok agent --always-approve --no-leader stdio`. `--no-pool` is the standalone gateway / `grok agent serve` escape hatch. The wire contract is in [`docs/pool-protocol.md`](../../docs/pool-protocol.md).
+原生模式是 `48190` 上的一条 WebSocket，底下挂多个 agent 进程。`acpw up` 起它；`acpw run NAME` 开或续一段会话；`acpw down NAME` 停一个 child；`acpw down` 停这条 socket。Pool 里的 grok 是 `grok agent --always-approve --no-leader stdio`。`--no-pool` 是独立 gateway / `grok agent serve` 逃生口。线路契约见 [`docs/pool-protocol.md`](../../docs/pool-protocol.md)。
 
-The agent-facing instructions ship alongside this package as the `acp-workers` skill: see [`skills/acp-workers/`](../../skills/acp-workers/) in the repository, or install it with `npx skills add ticoAg/acp-workers --skill acp-workers`.
+面向 agent 的指令作为 `acp-workers` skill 与本包一同发布：见仓库里的 [`skills/acp-workers/`](../../skills/acp-workers/)，或用 `npx skills add ticoAg/acp-workers --skill acp-workers` 安装。
 
-## Development
+## 开发
 
 ```bash
 uv sync
@@ -27,8 +27,8 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Tests drive the hidden `mock` adapter, an in-package echo agent. No real agent binary is needed.
+测试驱动隐藏的 `mock` adapter，也就是包内的 echo agent。不需要真实 agent 二进制。
 
-## License
+## 许可证
 
 MIT

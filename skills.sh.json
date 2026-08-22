@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "ACP",
-      "description": "Skills for dispatching work to resident Agent Client Protocol workers on this machine.",
+      "description": "把任务派发给本机常驻的 Agent Client Protocol worker。",
       "skills": ["acp-workers"]
     }
   ]

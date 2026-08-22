@@ -1,87 +1,78 @@
 # acp-workers
 
-Resident [ACP](https://agentclientprotocol.com) workers for host-agent dispatch.
+本机常驻的 [ACP](https://agentclientprotocol.com) worker，供 host agent 派发任务。
 
-The **host** agent plans and verifies. **Workers** (Grok, Claude Code, Codex, Cursor) execute over a WebSocket on this machine. This repository ships the skill that teaches agents the workflow, plus the `acpw` CLI that implements it.
+**Host** 负责规划和验收。**Worker**（Grok、Claude Code、Codex、Cursor）通过本机 WebSocket 执行。本仓库同时发布两份产物：教 agent 走这套流程的 skill，以及实现它的 `acpw` CLI。
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
-## Available Skills
+## 可用 Skill
 
 ### acp-workers
 
-Dispatch a scoped coding task to a resident ACP worker and verify the result yourself.
+把范围明确的编码任务派给常驻 ACP worker，验收由你自己做。
 
-**Use when:**
+**适用：**
 
-- Handing a self-contained coding task to grok / claude / codex / cursor
-- Starting one WebSocket that owns many agent processes (`acpw up`)
-- Resuming a conversation with the `session_id` from the last `acpw run`
+- 把一件可独立完成的编码任务交给 grok / claude / codex / cursor
+- 起一条 WebSocket，底下挂多个 agent 进程（`acpw up`）
+- 用上次 `acpw run` 返回的 `session_id` 续对话
 
-**Not for:** grok TUI consultation or debate, MCP server setup, `grok -p`, or treating a worker's self-report as verification.
+**不适用：** grok TUI 咨询或辩论、MCP server 配置、`grok -p`，或把 worker 的自我报告当成验收。
 
-## Installation
+## 安装
 
 ```bash
 npx skills add ticoAg/acp-workers --skill acp-workers
 bash <installed-skill-dir>/scripts/ensure-acpw.sh --completion
 ```
 
-The skill ships an idempotent bootstrap that installs the `acpw` CLI with uv and registers bash completion. To do it by hand instead:
+Skill 自带幂等引导脚本：用 uv 安装 `acpw` CLI，并注册 bash 补全。想手动装：
 
 ```bash
 uv tool install "git+https://github.com/ticoAg/acp-workers#subdirectory=packages/acpw"
 acpw install
 ```
 
-Registry/state locations and the uninstall order live in [`skills/acp-workers/references/install.md`](skills/acp-workers/references/install.md).
+Registry / state 路径以及卸载顺序见 [`skills/acp-workers/references/install.md`](skills/acp-workers/references/install.md)。
 
-### Have an agent install it
+### 让 agent 代装
 
-Paste this to any coding agent with shell access:
+把下面这段贴给任何有 shell 的编码 agent：
 
 ```
-Install the acp-workers skill and its CLI, then verify:
+把 acp-workers skill 和它的 CLI 装好，然后核验：
 
 1. `npx skills add ticoAg/acp-workers --skill acp-workers`
 2. `bash .agents/skills/acp-workers/scripts/ensure-acpw.sh --completion`
-   (if your harness installs skills elsewhere, use that path)
-3. Both commands print one JSON line. The bootstrap is idempotent and
-   version-aware: `already` means it was current, `installed` / `updated`
-   mean it acted. On `"ok": false`, do what `notes` says — do not invent
-   another install method, and do not pip install anything.
-4. The bootstrap runs `acpw selfcheck` for you; `"selfcheck": "pass"` is
-   what you want. Run `acpw selfcheck` again yourself if you want the full
-   report. An `exposure` warning is expected — workers bind 0.0.0.0 by
-   design. Anything in `failed` is not.
-5. Read `.agents/skills/acp-workers/SKILL.md` before dispatching work.
+   （若你的 harness 把 skill 装到别处，改成那个路径）
+3. 两条命令各打印一行 JSON。引导脚本幂等且带版本闸门：`already` 表示已是当前版本，`installed` / `updated` 表示它动手了。`"ok": false` 时按 `notes` 做——不要另想装法，也不要用 pip 装。
+4. 脚本会替你跑 `acpw selfcheck`；要的是 `"selfcheck": "pass"`。想看完整报告再自己跑一次 `acpw selfcheck`。`exposure` 告警是预期的——worker 默认绑 `0.0.0.0`。`failed` 里有东西才不正常。
+5. 派活之前先读 `.agents/skills/acp-workers/SKILL.md`。
 
-Report the two JSON lines back verbatim. Do not claim success without them.
+把两行 JSON 原样贴回来。没有它们不要声称成功。
 ```
 
-## Updating
+## 更新
 
 ```bash
 npx skills update acp-workers
 bash <installed-skill-dir>/scripts/ensure-acpw.sh --update
 ```
 
-The bootstrap also self-heals: it compares `acpw version` against the floor the skill needs and upgrades on its own when the CLI is behind. The skill and the CLI ship under one version number; see [CHANGELOG.md](CHANGELOG.md).
+引导脚本也会自愈：把 `acpw version` 和 skill 需要的下限比较，CLI 落后就自行升级。Skill 和 CLI 共用一个版本号，见 [CHANGELOG.md](CHANGELOG.md)。
 
-## Usage
+## 用法
 
 ```
-Start the shared WebSocket and hand grok the failing test in /tmp/task.txt
+起共享 WebSocket，把 /tmp/task.txt 里失败的测试交给 grok
 ```
 
 ```bash
 acpw ls && acpw up grok --cwd "$PWD" && acpw run grok -f /tmp/task.txt
 ```
 
-One WebSocket, many agents. `acpw up` starts a single daemon on `48190` that
-owns the children. `acpw run` returns a `session_id`; pass it back as
-`--session-id` to continue the same conversation. `acpw run` / `acpw ping`
-start that daemon if none is live.
+一条 WebSocket，多个 agent。`acpw up` 在 `48190` 起一个 daemon，底下挂 children。`acpw run` 返回 `session_id`；下次带 `--session-id` 就能续同一段对话。`acpw run` / `acpw ping` 在 daemon 还没起时会自己起一份。
 
 ```bash
 acpw up
@@ -92,34 +83,31 @@ acpw down grok
 acpw down
 ```
 
-`--no-pool` uses a per-worker gateway or `grok agent serve`. Details in
-[`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md).
+`--no-pool` 走每个 worker 自己的 gateway 或 `grok agent serve`。细节见 [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md)。
 
-Workers bind `0.0.0.0` by default and clients dial loopback. They run always-approve and
-the server key travels in cleartext, so do not expose these ports to a network you do not
-trust — `acpw selfcheck` warns about exactly this.
+Worker 默认绑 `0.0.0.0`，客户端拨回环。它们跑 always-approve，`server-key` 明文过线，所以别把这些端口放到不可信网络——`acpw selfcheck` 正是为此告警。
 
-## Repository Structure
+## 仓库结构
 
 ```
 skills/
   acp-workers/
-    SKILL.md          # agent instructions
-    AGENTS.md         # cross-agent entry point
-    README.md         # human-facing skill docs
-    metadata.json     # version, abstract, references
-    scripts/          # ensure-acpw.sh, the CLI bootstrap
-    references/       # install, wire protocol, pool
-    assets/           # example registry file
+    SKILL.md          # agent 指令
+    AGENTS.md         # 跨 agent 入口
+    README.md         # 给人看的 skill 说明
+    metadata.json     # version、abstract、references
+    scripts/          # ensure-acpw.sh，CLI 引导脚本
+    references/       # 安装、线路协议、pool
+    assets/           # registry 示例
 packages/
-  acpw/               # the CLI: pyproject, src/acpw, tests
+  acpw/               # CLI：pyproject、src/acpw、tests
 docs/
-  pool-protocol.md    # daemon wire contract, for people changing the daemon
-skills.sh.json        # skills.sh grouping manifest
-CHANGELOG.md          # one version line for both artifacts
+  pool-protocol.md    # daemon 线路契约，给改 daemon 的人看
+skills.sh.json        # skills.sh 分组清单
+CHANGELOG.md          # 两份产物共用一条版本线
 ```
 
-## Development
+## 开发
 
 ```bash
 cd packages/acpw
@@ -127,11 +115,11 @@ uv sync
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
-uv tool install --editable .   # put a live acpw on PATH
+uv tool install --editable .   # 把可热更新的 acpw 放到 PATH
 ```
 
-Tests never touch a real agent binary; they drive the hidden `mock` adapter, an in-package echo agent.
+测试从不碰真实 agent 二进制；它们驱动隐藏的 `mock` adapter，也就是包内的 echo agent。
 
-## License
+## 许可证
 
 MIT

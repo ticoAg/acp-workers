@@ -1,51 +1,51 @@
 # acp-workers
 
-Dispatch coding work over one resident WebSocket that owns many agent processes, and keep verification with the host agent.
+通过一条常驻 WebSocket 派发编码任务，底下挂多个 agent 进程；验收留在 host agent。
 
-`acpw up` starts that socket. `acpw run NAME` opens or resumes a session and returns a `session_id`. Grok, Claude, Codex, and Cursor are children on the same daemon. `--no-pool` is the standalone gateway / `grok agent serve` escape hatch.
+`acpw up` 起这条 socket。`acpw run NAME` 开或续一段会话，返回 `session_id`。Grok、Claude、Codex、Cursor 都是同一 daemon 下的 children。`--no-pool` 是独立 gateway / `grok agent serve` 逃生口。
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
-## Install
+## 安装
 
-Install just this skill:
+只装这份 skill：
 
 ```bash
 npx skills add ticoAg/acp-workers --skill acp-workers
 ```
 
-The skill drives the `acpw` CLI, which is a separate install. The bootstrap script ships with the skill and is idempotent:
+Skill 驱动的 `acpw` CLI 是另一次安装。引导脚本随 skill 下发，且幂等：
 
 ```bash
 bash scripts/ensure-acpw.sh --completion
 ```
 
-Equivalent by hand:
+等价的手动步骤：
 
 ```bash
 uv tool install "git+https://github.com/ticoAg/acp-workers#subdirectory=packages/acpw"
 acpw install
 ```
 
-## Update
+## 更新
 
 ```bash
 npx skills update acp-workers
 bash scripts/ensure-acpw.sh --update
 ```
 
-The skill and the CLI carry the same version number. `acpw version` prints what is installed; the bootstrap holds a floor and upgrades the CLI by itself when the skill needs a newer one.
+Skill 和 CLI 共用同一版本号。`acpw version` 打印已装版本；引导脚本持有下限，skill 需要更新的 CLI 时会自行升级。
 
-## Requirements
+## 要求
 
-- Python 3.12+ and uv; `~/.local/bin` on `PATH`
-- One or more agent binaries: `grok`, `npx` (Claude Code / Codex adapters), `cursor-agent`
-- Port `48190` free for the shared WebSocket, or a custom `ACPW_POOL_BIND`
+- Python 3.12+ 和 uv；`~/.local/bin` 在 `PATH` 里
+- 至少一个 agent 二进制：`grok`、`npx`（Claude Code / Codex adapter）、`cursor-agent`
+- 共享 WebSocket 需要端口 `48190` 空闲，或自定义 `ACPW_POOL_BIND`
 
-## Use
+## 使用
 
 ```bash
-acpw selfcheck            # verify the install end to end, mock round trip included
+acpw selfcheck            # 端到端核验安装，含 mock 往返
 acpw doctor && acpw ls
 acpw up grok --cwd "$PWD"
 acpw run grok -f /tmp/task.txt
@@ -53,7 +53,7 @@ acpw run grok -f /tmp/next.txt --session-id <session_id>
 acpw down
 ```
 
-`acpw run` / `acpw ping` start the socket if needed. A second grok process is `acpw add grok-b --kind grok`.
+`acpw run` / `acpw ping` 在需要时会自己起 socket。第二个 grok 进程用 `acpw add grok-b --kind grok`。
 
 ```bash
 acpw up
@@ -63,23 +63,23 @@ acpw down claude
 acpw down
 ```
 
-`--no-pool` uses that worker's own gateway; `--url` names one socket and also bypasses the pool.
+`--no-pool` 走该 worker 自己的 gateway；`--url` 指名某个 socket，同样绕开 pool。
 
-`ok` means the ACP turn ended, not that the task is correct. Read the diff and run the tests before accepting anything.
+`ok` 表示 ACP 回合结束，不表示任务做对。接受任何结果之前先看 diff、跑测试。
 
-Workers bind `0.0.0.0` and run always-approve, with the server key in cleartext. Keep these ports off untrusted networks; `acpw selfcheck` reports an `exposure` warning as a reminder.
+Worker 绑 `0.0.0.0`，跑 always-approve，`server-key` 明文过线。别把这些端口放到不可信网络；`acpw selfcheck` 会报 `exposure` 告警作为提醒。
 
-## Files
+## 文件
 
-| Path | Role |
+| 路径 | 作用 |
 | --- | --- |
-| [SKILL.md](./SKILL.md) | The procedure agents load |
-| [scripts/ensure-acpw.sh](./scripts/ensure-acpw.sh) | Idempotent CLI bootstrap; one JSON line on stdout |
-| [references/install.md](./references/install.md) | Install, registry/state paths, uninstall order |
-| [references/protocol.md](./references/protocol.md) | URL scheme, ACP handshake, stdio bridge, what Grok inherits |
-| [references/pool.md](./references/pool.md) | Native WebSocket, session durability, ownership, error codes |
-| [assets/registry.example.json](./assets/registry.example.json) | Registry file shape |
+| [SKILL.md](./SKILL.md) | agent 加载的流程 |
+| [scripts/ensure-acpw.sh](./scripts/ensure-acpw.sh) | 幂等 CLI 引导；stdout 一行 JSON |
+| [references/install.md](./references/install.md) | 安装、registry/state 路径、卸载顺序 |
+| [references/protocol.md](./references/protocol.md) | URL 方案、ACP 握手、stdio 桥、Grok 继承什么 |
+| [references/pool.md](./references/pool.md) | 原生 WebSocket、session 耐久、所有权、错误码 |
+| [assets/registry.example.json](./assets/registry.example.json) | registry 文件形状 |
 
-## License
+## 许可证
 
 MIT

@@ -1,4 +1,4 @@
-# Install / Uninstall
+# 安装 / 卸载
 
 Skill 和 CLI 是两件东西。Skill 让各 agent 扫到 `SKILL.md`；CLI 提供 `acpw` 二进制。
 
@@ -91,7 +91,7 @@ acpw install   # bash 补全 → ~/.local/share/bash-completion/completions/acpw
 
 registry 不需要手写，`acpw add` / `acpw up` 会维护。示例文件只用于对照字段：`bind` 默认 `0.0.0.0`，写成 `127.0.0.1` 就只收本机；`stdio_argv` 用于二进制不在默认位置时覆盖。`_pool` 下划线开头，不会和 worker 名字撞。
 
-## Uninstall
+## 卸载
 
 顺序固定：先停 worker，再卸 CLI 与补全，最后卸 skill。
 

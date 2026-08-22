@@ -22,11 +22,11 @@ acpw down                            # 停这条 WebSocket
 
 | 用这条 WebSocket（默认） | 用独立 gateway / serve（`--no-pool`） |
 | --- | --- |
-| 一条长连接上同时跟几个 agent 说话 | 要隔离 blast radius：一个挂了别的还在 |
+| 一条长连接上同时跟几个 agent 说话 | 要隔离故障面：一个挂了别的还在 |
 | 只想记 `48190` 和一把 secret | 要按端口、按 `<name>/server.log` 追查 |
 | 多个 `acpw run` 同时打过来，并用 `--session-id` 续 | 调试单个独立 gateway / serve |
 
-这条 socket 是单点故障：daemon 一挂，名下 child 全停。public session 映射写在 `_pool/sessions.json`，daemon 再起后同一 `--session-id` 仍可续。要隔离进程就 `acpw up NAME --no-pool`。
+这条 socket 是单点故障：daemon 一挂，名下 child 全停。公开 session 映射写在 `_pool/sessions.json`，daemon 再起后同一 `--session-id` 仍可续。要隔离进程就 `acpw up NAME --no-pool`。
 
 ## 入口
 
@@ -41,9 +41,9 @@ GET /health
 | `.../_pool/pid` | daemon pid |
 | `.../_pool/server.log` | daemon 日志；child stderr 也进这里，不进 WebSocket |
 | `.../_pool/bind` | daemon 实际起在哪个 bind。`acpw up` 不写 `--bind` 时：先 `ACPW_POOL_BIND`，再这个文件，最后才是 `0.0.0.0:48190` |
-| `.../_pool/sessions.json` | public session id → `{worker, native, cwd}`；原子写。`acpw down` 再起后靠它续 L3 |
+| `.../_pool/sessions.json` | 公开 session id → `{worker, native, cwd}`；原子写。`acpw down` 再起后靠它续 L3 |
 
-错或没带 `server-key` → HTTP `401`，和独立 gateway 一样。`GET /health` 不需要 key，回 `kind` 为 `pool` 的 JSON。因此一份对着**别的** state 目录起的 daemon，`/health` 仍显示 live，鉴权才 401——CLI 这时会点出 bind、secret 路径，以及 `acpw down` 或把 `ACPW_STATE_DIR` 指到那一份。监听面是 `0.0.0.0`，也就是说这一把 secret 明文过线且 child 是 always-approve——别把 `48190` 放到不可信网络，`acpw selfcheck` 的 `exposure` 项会提醒。State 目录仍吃 `ACPW_STATE_DIR`，见 [install.md](install.md)。独立 handshake 见 [protocol.md](protocol.md)。
+错或没带 `server-key` → HTTP `401`，和独立 gateway 一样。`GET /health` 不需要 key，回 `kind` 为 `pool` 的 JSON。因此一份对着**别的** state 目录起的 daemon，`/health` 仍显示 live，鉴权才 401——CLI 这时会点出 bind、secret 路径，以及 `acpw down` 或把 `ACPW_STATE_DIR` 指到那一份。监听面是 `0.0.0.0`，也就是说这一把 secret 明文过线且 child 是 always-approve——别把 `48190` 放到不可信网络，`acpw selfcheck` 的 `exposure` 项会提醒。State 目录仍吃 `ACPW_STATE_DIR`，见 [install.md](install.md)。独立握手见 [protocol.md](protocol.md)。
 
 ## 命令
 
@@ -74,7 +74,7 @@ acpw down
 
 ## Session 三档
 
-public id 长 `acpw-s` 加 16 位 hex，故意不可猜。它比开它的那条连接活得长：
+公开 id 长 `acpw-s` 加 16 位 hex，故意不可猜。它比开它的那条连接活得长：
 
 | 档 | 活过什么 | 怎么续 |
 | --- | --- | --- |
@@ -96,7 +96,7 @@ Host 眼里 daemon 就是 ACP agent。Child 的 `initialize` 在 spawn 时由 da
 | 之后所有带 `params.sessionId` 的请求 | 跟到该 session 绑定的 child；必要时走 L2/L3 续上 |
 | 连接断开 | 占用解除，session 仍在（L1）；child 仍常驻 |
 
-Pool 发给你的 `sessionId` 是 daemon 自己的 public id，不是 child 内部那个——child 之间的 id 会撞，daemon 负责两边翻译。
+Pool 发给你的 `sessionId` 是 daemon 自己的公开 id，不是 child 内部那个——child 之间的 id 会撞，daemon 负责两边翻译。
 
 `acpw run NAME` 把 NAME 填进 `_meta.worker`。换 agent 就再 `session/new` 一次。CLI 每次调用开一条新连接；把上次返回的 `--session-id` 再贴上去即可续。
 

@@ -1,8 +1,8 @@
 ---
 name: acp-workers
-description: "Dispatch coding work over one resident WebSocket that owns many agent processes (grok/claude/codex/cursor). Resume with --session-id. Host plans, scopes, and verifies; workers execute. USE FOR: acpw up/run/down, --session-id, 48190, 一个 WebSocket 多个 agent, 并发派发, grok agent stdio, ACP websocket, 常驻 ACP. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
+description: "通过一条常驻 WebSocket 把编码任务派给多个 agent 进程（grok/claude/codex/cursor）。用 --session-id 续会话。Host 规划、限定范围并验收；worker 只执行。USE FOR: acpw up/run/down, --session-id, 48190, 一个 WebSocket 多个 agent, 并发派发, grok agent stdio, ACP websocket, 常驻 ACP. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
 license: MIT
-compatibility: "Requires Python 3.12+ and uv. CLI name is acpw."
+compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
   version: "0.6.0"
@@ -14,19 +14,19 @@ Host 只做规划、派发、验收。执行面是**一个**常驻 WebSocket（`
 
 `acpw up` 起这个 socket；`acpw run NAME` 在上面开或续一段会话，返回 `session_id`；下次带 `--session-id` 就能续。`acpw run` 在 socket 还没起时会自己起一份。独立 gateway / `grok agent serve` 只在 `--no-pool` 时出现。见 [references/pool.md](references/pool.md)。
 
-## When to Use
+## 何时使用
 
 - 把一件可验收的编码任务派给 grok / claude / codex / cursor
 - 一条 WebSocket 同时驱动多个 agent
 - 用上次返回的 `session_id` 把对话续上
 
-## When Not to Use
+## 何时不用
 
 - 只想和 grok 对话或多方辩论 → `grok-build-connector`
 - 配置 MCP server、跑 `grok -p`、在 tty 里手动 `grok agent stdio`
 - 把 worker 的自我报告当成验收结论
 
-## Prerequisites
+## 前置条件
 
 ```bash
 bash scripts/ensure-acpw.sh
@@ -36,7 +36,7 @@ bash scripts/ensure-acpw.sh
 
 `"ok":false` 时按 `notes` 处理，不要自己另想装法：缺 uv、`~/.local/bin` 不在 PATH，或自检没过（完整报告在 stderr）。补全要单独加 `--completion`（会写 `~/.bashrc`）。细节见 [references/install.md](references/install.md)。
 
-## Roles
+## 角色
 
 | 词 | 含义 |
 | --- | --- |
@@ -47,28 +47,28 @@ bash scripts/ensure-acpw.sh
 
 默认监听 `0.0.0.0:48190`，连接拨 `127.0.0.1`。child 是 always-approve 且 secret 明文过线，别把端口放到不可信网络——`acpw selfcheck` 会就此告警。`--no-pool` 才用独立端口：grok `48191`，claude `48192`，codex `48193`，cursor `48194`。
 
-## Workflow
+## 工作流
 
-### Step 1: 探活
+### 步骤 1：探活
 
 ```bash
 acpw doctor && acpw ls
 ```
 
-`ls` 里的 `pool.live` 和 worker 的 `via: pool` 才是原生路径。per-worker 端口空着是正常的。
+`ls` 里的 `pool.live` 和 worker 的 `via: pool` 才是原生路径。每个 worker 自己的端口空着是正常的。
 
-### Step 2: 起 socket
+### 步骤 2：起 socket
 
 ```bash
 acpw up                              # 只起 WebSocket
 acpw up grok claude --cwd "$PWD"     # 顺带预热这些 child
 ```
 
-### Step 3: 写 prompt
+### 步骤 3：写 prompt
 
 一次只派一件可验收的事，写清楚改哪些文件、完成标准是什么。长 prompt 落到文件走 `-f`，别塞进命令行。
 
-### Step 4: 派发
+### 步骤 4：派发
 
 ```bash
 acpw run grok -f /tmp/a.txt
@@ -78,11 +78,11 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 
 第一次 `run` 返回的 `session_id` 留下来。连接断了、child 死了、daemon 重启了，把这个 id 再贴回去就能续。对话历史回不回得来，取决于那个 agent 是否广告并执行 `session/load`。第二个 grok 进程：`acpw add grok-b --kind grok`。默认超时 600s。
 
-### Step 5: 验收
+### 步骤 5：验收
 
 `ok` 只代表 ACP 回合正常结束，不代表任务做对。Host 必须自己看 diff、跑测试。`stop_reason` 为 `cancelled` 一律当失败处理。
 
-## Commands
+## 命令
 
 | 命令 | 作用 |
 | --- | --- |
@@ -96,7 +96,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | `add` / `rm` | 登记、注销 URL |
 | `install` / `uninstall` | bash 补全；`--purge` 再停 worker 并删 registry/state |
 
-## Validation
+## 验收清单
 
 - [ ] `acpw selfcheck` 的 `failed` 为空（装完自动跑过一次）
 - [ ] `acpw ls` 的 `pool.live` 为真，或 `run` 自己拉起过 socket
@@ -105,7 +105,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 - [ ] Host 自己看过 diff
 - [ ] Host 自己跑过测试并贴出真实结果
 
-## Common Pitfalls
+## 常见坑
 
 | 问题 | 做法 |
 | --- | --- |
@@ -118,7 +118,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | `session <id> is held by another client` | 同一时刻一条连接占用一个 session；等那条连接断开后再续 |
 | daemon 挂了名下 child 一起停 | session 映射留在 `_pool/sessions.json`，daemon 再起后可续。要隔离进程就 `acpw up NAME` 加 `--no-pool` |
 
-## References
+## 参考
 
 - [scripts/ensure-acpw.sh](scripts/ensure-acpw.sh) — 幂等装好 CLI，输出一行 JSON
 - [references/install.md](references/install.md) — 安装、补全、卸载顺序

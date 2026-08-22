@@ -1,107 +1,107 @@
-# Pool protocol v2
+# Pool 协议 v2
 
-Contract between `acpw daemon` (server) and `MuxClient` (client). Both sides are implemented against this file; if the code and this file disagree, this file is the bug report.
+`acpw daemon`（服务端）与 `MuxClient`（客户端）之间的契约。两边都按本文件实现；代码和本文不一致时，以本文为准报 bug。
 
-## Why
+## 为什么
 
-This is the native mode of the project: one resident daemon on one port that owns several stdio children, so one host connection can drive several agents concurrently and resume them by public session id. The standalone `acpw gateway` (one worker, one port, one secret, one in-flight request) remains as `--no-pool`.
+这是本项目的原生模式：一个常驻 daemon 占一个端口，底下挂若干 stdio children，所以一条 host 连接就能并发驱动多个 agent，并用公开 session id 续上。独立的 `acpw gateway`（一个 worker、一口端口、一把 secret、一条 in-flight 请求）作为 `--no-pool` 保留。
 
-## Endpoint
+## 端点
 
 ```
 ws://127.0.0.1:48190/ws?server-key=<secret>
 GET /health
 ```
 
-- Secret lives at `~/.local/state/acp-workers/_pool/secret`, pid at `.../pid`, log at `.../server.log`, the bind the daemon was started on at `.../bind`, and the durable session map at `.../sessions.json`.
-- Bind discovery, in order: `ACPW_POOL_BIND` in the environment, then the `bind` state file, then `DEFAULT_POOL_BIND`. `pool_up()` writes the file; everything else reads it, so a pool started on a non-default port stays reachable.
-- Wrong or missing `server-key` on `/ws` → HTTP 401, same as the per-worker gateway.
-- `GET /health` → `{"ok":true,"kind":"pool","pid":N,"workers":[{"name","kind","alive","pid","sessions"}],"sessions":N}`. Both session counts are live bindings, not durable records, so they drop to zero when a child dies even though those sessions can still be resumed.
-- `/health` requires no key. A daemon started against a different state directory therefore looks alive until `/ws` answers 401; clients should say so plainly rather than reporting the pool as down.
-- Many connections are allowed at once. There is no `conn_lock`.
+- Secret 在 `~/.local/state/acp-workers/_pool/secret`，pid 在 `.../pid`，日志在 `.../server.log`，daemon 实际起在哪个 bind 记在 `.../bind`，耐久 session 映射在 `.../sessions.json`。
+- Bind 发现顺序：环境变量 `ACPW_POOL_BIND`，然后 `bind` state 文件，最后 `DEFAULT_POOL_BIND`。`pool_up()` 写这个文件，其余都读它，所以 pool 起在非默认端口时仍能被找到。
+- `/ws` 上 `server-key` 错或缺失 → HTTP 401，与每个 worker 的独立 gateway 相同。
+- `GET /health` → `{"ok":true,"kind":"pool","pid":N,"workers":[{"name","kind","alive","pid","sessions"}],"sessions":N}`。两处 session 计数都是 live 绑定，不是耐久记录，所以 child 死后会掉到零，尽管那些 session 仍可续。
+- `/health` 不需要 key。因此一份对着**另一份** state 目录起的 daemon，看起来仍 live，直到 `/ws` 回 401；客户端应把这一点说清楚，而不是报 pool 已停。
+- 允许多条连接同时存在。没有 `conn_lock`。
 
-## Messages the daemon answers itself
+## Daemon 自己应答的消息
 
-The daemon is the ACP agent from the host's point of view. Children are initialized by the daemon at spawn time; the host never sees a child's `initialize`.
+在 host 眼里 daemon 就是 ACP agent。Children 在 spawn 时由 daemon 完成 initialize；host 看不到 child 的 `initialize`。
 
 | Method | Result |
 | --- | --- |
 | `initialize` | `{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false,"audio":false,"embeddedContext":true}},"authMethods":[],"agentInfo":{"name":"acpw-pool","version":"<acpw version>"}}` |
 | `authenticate` | `{}` |
 | `worker/list` | `{"workers":[{"name","kind","alive","pid","sessions"}]}` |
-| `worker/up` | params `{"name":str,"cwd":str?}` → `{"name","alive":true,"pid":N,"already":bool,"protocolVersion","agentInfo","agentVersion"}`. Spawns the child and runs `initialize` (plus `authenticate` when the child reports auth methods) before returning. The last three fields echo the child's own handshake, so a caller can tell which agent it reached rather than only hearing from the daemon; they are null if the child answered without them. |
-| `worker/down` | params `{"name":str}` → `{"name","stopped":bool}`. Kills the child and clears its in-memory bindings. The durable records survive, so those sessions are still resumable under L2. |
+| `worker/up` | params `{"name":str,"cwd":str?}` → `{"name","alive":true,"pid":N,"already":bool,"protocolVersion","agentInfo","agentVersion"}`。Spawn 该 child 并跑完 `initialize`（child 声明了 auth methods 时再加上 `authenticate`）才返回。后三个字段回显 child 自己的握手，调用方才能知道打到了哪个 agent，而不是只听到 daemon；child 没带这些字段时为 null。 |
+| `worker/down` | params `{"name":str}` → `{"name","stopped":bool}`。杀掉 child 并清掉内存绑定。耐久记录留下，那些 session 仍可按 L2 续。 |
 
-## Routing
+## 路由
 
-1. `session/new` and `session/load` **must** carry `params._meta.worker` naming a registry worker. Missing or unknown → error `-32602` with message `missing _meta.worker` / `unknown worker <name>`.
-2. The daemon spawns that worker's child on demand (same as `worker/up`), forwards the request, and on success mints a public `sessionId` of the form `acpw-s<16 hex>` bound to `(worker, child, connection)`. The child's own id never reaches the host. The id is random, not sequential: a session outlives its connection, so knowing the id is the capability to resume the conversation.
-3. Every other request carrying `params.sessionId` routes to that session's child, resuming it first if necessary (see Session durability). Unknown session or unresumable session → error `-32001`, message `unknown session <id>`. A session currently attached to a different **open** connection → error `-32001`, message `session <id> is held by another client`.
-4. A request that is neither control nor session-bound → error `-32602`, message `no route: <method>`.
-5. Notifications from a child carrying `params.sessionId` go to the connection currently attached to the session. A notification for an unknown or detached session is dropped and logged to the daemon log.
+1. `session/new` 和 `session/load` **必须**带 `params._meta.worker`，值为 registry 里的 worker 名。缺失或未知 → 错误 `-32602`，message 为 `missing _meta.worker` / `unknown worker <name>`。
+2. Daemon 按需 spawn 该 worker 的 child（与 `worker/up` 相同），转发请求，成功时铸造形如 `acpw-s<16 hex>` 的公开 `sessionId`，绑定到 `(worker, child, connection)`。Child 自己的 id 永不到达 host。这个 id 是随机的，不是序号：session 活过它的连接，知道这个 id 就是续对话的能力。
+3. 其他带 `params.sessionId` 的请求路由到该 session 的 child，必要时先续上（见 Session 耐久）。未知 session 或不可续 → 错误 `-32001`，message 为 `unknown session <id>`。Session 当前附着在另一条**未关闭**的连接上 → 错误 `-32001`，message 为 `session <id> is held by another client`。
+4. 既不是控制消息、也不绑定 session 的请求 → 错误 `-32602`，message 为 `no route: <method>`。
+5. Child 发来、带 `params.sessionId` 的 notification 送到当前附着该 session 的连接。未知或已卸下的 session 的 notification 丢弃，并记进 daemon 日志。
 
-## Session durability
+## Session 耐久
 
-A session is a conversation, not a socket. It survives the connection that opened it and is resumed by presenting its id again. Three tiers, tried in order:
+Session 是一段对话，不是一条 socket。它活过打开它的那条连接，再次出示 id 即可续。三档，按顺序尝试：
 
-| Tier | State | What the daemon does |
+| 档 | 状态 | Daemon 做什么 |
 | --- | --- | --- |
-| L1 | Child alive, session in memory | Re-attach it to the requesting connection. No agent involvement. |
-| L2 | Child gone, mapping known | Respawn the worker, `session/load` the child-native id, re-bind under the same public id. |
-| L3 | Daemon restarted | Same as L2, with the mapping read back from `sessions.json`. |
+| L1 | Child 活着，session 在内存 | 重新附着到请求方连接。不经过 agent。 |
+| L2 | Child 没了，映射还在 | 再 spawn 该 worker，用 child 原生 id 做 `session/load`，绑回同一个公开 id。 |
+| L3 | Daemon 重启过 | 与 L2 相同，映射从 `sessions.json` 读回。 |
 
-- `sessions.json` maps public id → `{"worker":str,"native":str,"cwd":str|null}`. Written on every bind, atomically (temp file plus rename). A record outlives its child on purpose: that is what makes L2 and L3 work.
-- L2 and L3 require the child to advertise `agentCapabilities.loadSession`. When it does not, the resume fails with `-32001` and message `worker <name> cannot resume sessions (loadSession not advertised)`. The daemon must check the capability it cached at spawn **before** sending `session/load`, so an agent that cannot resume says so instead of returning an opaque error.
-- If `session/load` returns a different `sessionId` than the one sent, the new value becomes the session's native id and the record is rewritten. The public id never changes.
-- Only one connection drives a session at a time. Attaching is allowed when the holder is absent or its socket has closed; stealing from a live holder is not.
-- Sessions die with their worker only in the sense that L1 stops applying. `worker/down` and child exit clear the in-memory binding but keep the durable record.
+- `sessions.json` 映射公开 id → `{"worker":str,"native":str,"cwd":str|null}`。每次绑定都原子写入（临时文件再 rename）。记录故意活过 child：这正是 L2 和 L3 能工作的原因。
+- L2 和 L3 要求 child 广告 `agentCapabilities.loadSession`。没有时续失败，错误 `-32001`，message 为 `worker <name> cannot resume sessions (loadSession not advertised)`。Daemon 必须在发送 `session/load` **之前**检查 spawn 时缓存的能力，这样不能续的 agent 会明确说出来，而不是回一个不透明错误。
+- 若 `session/load` 返回的 `sessionId` 与送进去的不同，新值成为该 session 的原生 id，并改写记录。公开 id 永不改变。
+- 同一时刻只有一条连接驱动一个 session。占用方不在或其 socket 已关闭时允许附着；从活着的占用方手里抢是不允许的。
+- Session 随 worker 一起「死」只体现在 L1 不再适用。`worker/down` 和 child 退出会清掉内存绑定，但留下耐久记录。
 
-## Identifier remapping
+## 标识符重映射
 
-Two independent id spaces meet at the daemon. Never leak one into the other.
+两套独立的 id 空间在 daemon 相遇。绝不把一套泄漏到另一套。
 
-- **Host → child.** The daemon allocates a fresh integer id per child (`1, 2, 3, …`, counter per child) and remembers `child.pending[child_id] = handler`. When the child answers with that id, the daemon replies to the owning connection using the host's **original** id, verbatim (it may be an int or a string).
-- **Child → host.** When a child sends a request (`session/request_permission`, `fs/read_text_file`, `fs/write_text_file`, `terminal/*`), the daemon allocates a **string** id of the form `"acpw:<n>"` from a global counter, stores `conn.inbound[acpw_id] = (child, child_side_id)`, and forwards it to the connection that owns the session. When the host answers `"acpw:<n>"`, the daemon writes the answer back to the child under the child's original id.
-  String ids are deliberate: hosts allocate integers, so `"acpw:*"` can never collide with an id the host chose.
-- **Session ids.** A third space, and the reason it exists: children pick their own session ids and two children may well pick the same string, so a flat table keyed by the child's id routes later requests to the wrong agent — silently. The daemon keys sessions by `acpw-s<16 hex>` and translates `params.sessionId` in both directions: child's id → public on the way up (`session/new` and `session/load` results, child notifications and requests), public → child's id on the way down. A child restart gets a new generation token, so a recycled id cannot inherit a dead session.
-- Responses must preserve `jsonrpc`, `id`, and exactly one of `result` / `error`.
+- **Host → child。** Daemon 为每个 child 分配一套新的整数 id（`1, 2, 3, …`，计数器按 child 分开），并记住 `child.pending[child_id] = handler`。Child 用该 id 应答时，daemon 用 host **原来的** id 原样回给所属连接（可能是 int 也可能是 string）。
+- **Child → host。** Child 发来请求（`session/request_permission`、`fs/read_text_file`、`fs/write_text_file`、`terminal/*`）时，daemon 从全局计数器分配形如 `"acpw:<n>"` 的 **string** id，存 `conn.inbound[acpw_id] = (child, child_side_id)`，并转发给拥有该 session 的连接。Host 应答 `"acpw:<n>"` 时，daemon 用 child 原来的 id 写回 child。
+  用 string id 是故意的：host 分配整数，所以 `"acpw:*"` 永远不会和 host 选的 id 撞车。
+- **Session id。** 第三套空间，存在的原因：children 自己选 session id，两个 child 很可能选出同一字符串，若用 child 的 id 做扁平表键，后续请求会静默打到错误的 agent。Daemon 用 `acpw-s<16 hex>` 作为 session 键，并双向翻译 `params.sessionId`：上行时 child id → 公开 id（`session/new` 和 `session/load` 的结果、child 的 notification 和 request），下行时公开 id → child id。Child 重启会拿到新的 generation token，回收的 id 不能继承已死 session。
+- Response 必须保留 `jsonrpc`、`id`，以及 `result` / `error` 恰好其中一个。
 
-## Concurrency
+## 并发
 
-- Each child has one reader thread draining stdout forever and dispatching by id; there is no read-until-my-id anywhere.
-- Each child has a write lock; each connection has a write lock. A WebSocket frame and a stdio line are each written atomically.
-- Multiple requests may be in flight per child. Whether the agent behind it truly parallelizes is the agent's business; the daemon does not serialize on its behalf.
-- Child stderr is drained to the daemon log, never to a WebSocket.
+- 每个 child 有一条 reader 线程永远排空 stdout，按 id 分发；任何地方都没有「读到我的 id 为止」。
+- 每个 child 一把写锁；每条连接一把写锁。一帧 WebSocket 和一行 stdio 各自原子写出。
+- 每个 child 可以有多条 in-flight 请求。背后的 agent 是否真并行，是 agent 自己的事；daemon 不为它串行化。
+- Child stderr 排到 daemon 日志，永不进 WebSocket。
 
-## Lifecycle
+## 生命周期
 
-- A connection dropping **detaches** its sessions; it does not end them. Children stay warm and the durable record stays on disk.
-- In-flight requests belonging to a dead connection are abandoned when their answer arrives.
-- A child exiting clears the in-memory binding of its sessions. A later request for one of them takes the L2 path.
-- The daemon exits on SIGTERM and kills every child. Sessions come back through L3.
+- 连接断开只是**卸下**它的 session，并不结束它们。Children 保持预热，耐久记录留在磁盘。
+- 属于已死连接的 in-flight 请求，答案到达时丢弃。
+- Child 退出会清掉其 session 的内存绑定。之后针对其中之一的请求走 L2。
+- Daemon 收到 SIGTERM 退出并杀掉每个 child。Session 经 L3 回来。
 
-## Errors
+## 错误
 
-| Code | When |
+| Code | 何时 |
 | --- | --- |
-| `-32602` | missing `_meta.worker`, unknown worker, unroutable method |
-| `-32001` | unknown session, session held by another client, or a worker that cannot resume |
-| `-32000` | child write failed or child exited mid-request |
+| `-32602` | 缺 `_meta.worker`、未知 worker、无法路由的 method |
+| `-32001` | 未知 session、被另一客户端占用、或 worker 不能续 |
+| `-32000` | 写给 child 失败，或请求做到一半 child 退了 |
 
-## Module contract
+## 模块契约
 
-Shared constants already live in `acpw.paths`: `DEFAULT_POOL_BIND = "0.0.0.0:48190"` and `POOL_STATE_NAME = "_pool"`. Response models already live in `acpw.types`: `PoolWorker`, `PoolStatus`, `PoolStartResponse`, `PoolStopResponse`.
+共享常量已在 `acpw.paths`：`DEFAULT_POOL_BIND = "0.0.0.0:48190"` 和 `POOL_STATE_NAME = "_pool"`。响应模型已在 `acpw.types`：`PoolWorker`、`PoolStatus`、`PoolStartResponse`、`PoolStopResponse`。
 
-`acpw/daemon.py` exposes exactly:
+`acpw/daemon.py` 恰好暴露：
 
 ```python
-def run_daemon(bind: str, secret_file: str) -> None: ...   # blocks until SIGTERM
+def run_daemon(bind: str, secret_file: str) -> None: ...   # 阻塞直到 SIGTERM
 ```
 
-`acpw/pool.py` exposes exactly:
+`acpw/pool.py` 恰好暴露：
 
 ```python
-def pool_secret() -> str: ...                    # read or create the pool secret
+def pool_secret() -> str: ...                    # 读取或创建 pool secret
 def pool_url(secret: str | None = None) -> str: ...
 def pool_live(timeout: float = 1.0) -> bool: ...  # GET /health
 def pool_up(bind: str | None = None, workers: list[str] | None = None,
@@ -112,27 +112,27 @@ def pool_ping(name: str) -> PingResponse: ...
 def pool_run(params: ExecParams) -> ExecResponse: ...
 ```
 
-`pool_up` with no bind resolves one the same way everything else does; starting a daemon on an address the rest of the code does not look at just produces a pool nobody can find.
+`pool_up` 不带 bind 时，解析方式和其余代码相同；把 daemon 起在其余代码不会去看的地址，只会得到一个谁都找不到的 pool。
 
-`pool_ping` must reach the named worker, not the daemon in front of it: send `worker/up` and report the child's `agentInfo` and `protocolVersion`. Handshaking with the pool alone proves nothing about the agent the caller asked for, and would report a broken agent binary as healthy.
+`pool_ping` 必须碰到指定的 worker，而不是挡在前面的 daemon：发 `worker/up`，报告 child 的 `agentInfo` 和 `protocolVersion`。只和 pool 握手证明不了调用方要的那个 agent，还会把坏掉的 agent 二进制报成健康。
 
-`pool_run` resume rule: when `params.session_id` is set, send `session/prompt` with that id directly. Do **not** call `session/new`, and do **not** call `session/load` — the daemon owns resuming. A `-32001` is surfaced to the caller as a failure; silently opening a fresh session would drop the conversation without telling anyone.
+`pool_run` 续会话规则：`params.session_id` 已设时，直接用该 id 发 `session/prompt`。**不要**调 `session/new`，也 **不要** 调 `session/load` —— 续是 daemon 的职责。`-32001` 作为失败浮给调用方；默默开一个新 session 会在谁都不知道的情况下丢掉对话。
 
-`acpw/client.py` gains, without touching `AcpClient`:
+`acpw/client.py` 在不碰 `AcpClient` 的前提下增加：
 
 ```python
 class MuxClient:
     def __init__(self, sock: socket.socket) -> None: ...
-    def start(self) -> None: ...                  # spawn the reader thread
+    def start(self) -> None: ...                  # 拉起 reader 线程
     def close(self) -> None: ...
     def rpc(self, method: str, params: dict | None = None, timeout: float = 60.0) -> dict: ...
-    def updates(self, session_id: str) -> list[dict]: ...   # session/update params seen so far
+    def updates(self, session_id: str) -> list[dict]: ...   # 目前看到的 session/update params
 ```
 
-## Client obligations (`MuxClient`)
+## 客户端义务（`MuxClient`）
 
-- One background reader thread; requests return via futures keyed by host id.
-- Answer `session/request_permission` with `{"outcome":{"outcome":"selected","optionId":"allow-once"}}`.
-- Answer `fs/*` and `terminal/*` with error `-32601` (`client fs not offered`), matching today's `AcpClient`.
-- Collect `session/update` notifications per `sessionId`.
-- Never block the reader thread on user code.
+- 一条后台 reader 线程；请求经按 host id 索引的 future 返回。
+- 用 `{"outcome":{"outcome":"selected","optionId":"allow-once"}}` 应答 `session/request_permission`。
+- 用错误 `-32601`（`client fs not offered`）应答 `fs/*` 和 `terminal/*`，与今天的 `AcpClient` 一致。
+- 按 `sessionId` 收集 `session/update` notification。
+- 永远不要在 reader 线程上阻塞用户代码。
