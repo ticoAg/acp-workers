@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "organization": "ticoAg",
   "date": "August 2026",
   "abstract": "Dispatches coding work to resident ACP workers over a loopback WebSocket through the acpw CLI. Grok runs natively via grok agent serve; Claude Code, Codex, and Cursor are bridged from stdio ACP onto the same URL. The host agent keeps planning, scoping, and verification; workers only execute. Every command prints one JSON line, and an ok result means the ACP turn ended, not that the task is correct.",

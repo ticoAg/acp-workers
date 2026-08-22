@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.1]
+
+### Fixed
+
+- `SKILL.md` frontmatter failed to parse as YAML: the unquoted `description` contains `USE FOR:`, which YAML reads as a nested mapping, so `npx skills add` skipped the skill and reported "No skills found". Quoted the scalar. CI now parses every skill's frontmatter.
+
 ## [0.1.0]
 
 ### Added
@@ -15,5 +21,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `acp-workers` skill: dispatch workflow, wire protocol reference, install reference, example registry.
 - `scripts/ensure-acpw.sh`: idempotent CLI bootstrap with a version floor, `--update`, `--force`, and `--completion`.
 
-[Unreleased]: https://github.com/ticoAg/acp-workers/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ticoAg/acp-workers/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ticoAg/acp-workers/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ticoAg/acp-workers/releases/tag/v0.1.0

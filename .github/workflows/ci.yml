@@ -25,6 +25,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Frontmatter parses as YAML
+        run: |
+          uv run --with pyyaml --no-project python - <<'PY'
+          import pathlib, sys, yaml
+
+          failed = False
+          for path in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
+              text = path.read_text(encoding="utf-8")
+              if not text.startswith("---\n"):
+                  print(f"{path}: missing frontmatter")
+                  failed = True
+                  continue
+              try:
+                  meta = yaml.safe_load(text.split("---\n", 2)[1])
+              except yaml.YAMLError as exc:
+                  print(f"{path}: {exc}")
+                  failed = True
+                  continue
+              for field in ("name", "description"):
+                  if not isinstance(meta.get(field), str) or not meta[field].strip():
+                      print(f"{path}: {field} must be a non-empty string")
+                      failed = True
+              if len(meta.get("description", "")) > 1024:
+                  print(f"{path}: description exceeds 1024 characters")
+                  failed = True
+              print(f"{path}: ok")
+          sys.exit(1 if failed else 0)
+          PY
       - name: Every skill has SKILL.md with a matching name
         run: |
           set -e

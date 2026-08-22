@@ -1,6 +1,6 @@
 [project]
 name = "acpw"
-version = "0.1.0"
+version = "0.1.1"
 description = "Resident ACP WebSocket workers. Host agents plan; workers execute."
 readme = "README.md"
 license = "MIT"
