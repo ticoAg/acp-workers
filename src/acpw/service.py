@@ -241,7 +241,7 @@ def stop(name: str) -> WorkerStopResponse:
         except OSError:
             continue
     time.sleep(0.4)
-    for target in list(killed):
+    for target in killed:
         if pid_alive(target):
             try:
                 os.kill(target, signal.SIGKILL)

@@ -7,11 +7,3 @@ dist/
 *.egg-info/
 .coverage
 .python-version
-.venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-dist/
-*.egg-info/
-.coverage

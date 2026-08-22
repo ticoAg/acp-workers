@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from pydantic import BaseModel
@@ -51,9 +51,9 @@ def cmd_doctor() -> None:
 @app.command("add")
 def cmd_add(
     name: str,
-    url: Annotated[Optional[str], typer.Option(help="ws://127.0.0.1:PORT/ws?server-key=...")] = None,
-    bind: Annotated[Optional[str], typer.Option()] = None,
-    kind: Annotated[Optional[str], typer.Option(help="grok|claude|codex|cursor")] = None,
+    url: Annotated[str | None, typer.Option(help="ws://127.0.0.1:PORT/ws?server-key=...")] = None,
+    bind: Annotated[str | None, typer.Option()] = None,
+    kind: Annotated[str | None, typer.Option(help="grok|claude|codex|cursor")] = None,
 ) -> None:
     """Register a worker or a manual websocket URL."""
     try:
@@ -75,7 +75,7 @@ def cmd_rm(name: str) -> None:
 @app.command("start", hidden=True)
 def cmd_up(
     name: str,
-    cwd: Annotated[Optional[Path], typer.Option()] = None,
+    cwd: Annotated[Path | None, typer.Option()] = None,
     timeout: Annotated[float, typer.Option()] = 45,
 ) -> None:
     """Start a worker if it is not live."""
@@ -105,11 +105,11 @@ def cmd_ping(name: str) -> None:
 @app.command("exec", hidden=True)
 def cmd_run(
     name: str,
-    prompt: Annotated[Optional[str], typer.Option("-p")] = None,
-    prompt_file: Annotated[Optional[Path], typer.Option("-f", "--prompt-file")] = None,
-    cwd: Annotated[Optional[Path], typer.Option()] = None,
-    session_id: Annotated[Optional[str], typer.Option()] = None,
-    url: Annotated[Optional[str], typer.Option()] = None,
+    prompt: Annotated[str | None, typer.Option("-p")] = None,
+    prompt_file: Annotated[Path | None, typer.Option("-f", "--prompt-file")] = None,
+    cwd: Annotated[Path | None, typer.Option()] = None,
+    session_id: Annotated[str | None, typer.Option()] = None,
+    url: Annotated[str | None, typer.Option()] = None,
     timeout: Annotated[float, typer.Option()] = 600,
 ) -> None:
     """Dispatch a prompt to a worker."""
