@@ -1,5 +1,5 @@
 {
-  "version": "0.6.1",
+  "version": "0.6.2",
   "organization": "ticoAg",
   "date": "2026年8月",
   "abstract": "通过一条常驻 WebSocket，用 acpw CLI 把编码任务派给多个 agent 进程（Grok、Claude、Codex、Cursor）。acpw up 起这条 socket；acpw run 返回 session_id，在 agent 广告 loadSession 时，可跨连接、child 重启、daemon 重启续对话。Host 负责规划、限定范围和验收；worker 只执行。每条命令打印一行 JSON；ok 只表示 ACP 回合结束，不表示任务做对。",

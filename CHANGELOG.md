@@ -6,6 +6,12 @@
 
 ## [未发布]
 
+## [0.6.2] - 2026-08-22
+
+### 修复
+
+- 并发冷启动时，没绑上端口的输家会覆盖 pid 文件；`read_pid` 认定那个 pid 已死就返回 None，`acpw down` 于是什么都不杀。`pool_down` 在 pid 文件不可用时改信 `/health` 报告的 pid；`pool_up` 在 health 起来后把正确 pid 写回文件（含 already 分支）。
+
 ## [0.6.1] - 2026-08-22
 
 ### 变更
@@ -98,7 +104,8 @@
 - `acp-workers` skill：派发流程、线路协议参考、安装参考、registry 示例。
 - `scripts/ensure-acpw.sh`：幂等 CLI 引导，带版本下限、`--update`、`--force`、`--completion`。
 
-[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.1...HEAD
+[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/ticoAg/acp-workers/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/ticoAg/acp-workers/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/ticoAg/acp-workers/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ticoAg/acp-workers/compare/v0.4.0...v0.5.0

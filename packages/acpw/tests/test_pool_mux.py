@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import socket
+import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -12,8 +15,8 @@ from typer.testing import CliRunner
 
 from acpw.adapters import ADAPTERS, resolve_stdio_argv
 from acpw.cli import app, poolable
-from acpw.paths import registry_path
-from acpw.pool import _init_params, _open_mux, pool_url
+from acpw.paths import POOL_STATE_NAME, registry_path, worker_state_dir
+from acpw.pool import _init_params, _open_mux, pool_down, pool_status, pool_up, pool_url
 
 runner = CliRunner()
 
@@ -36,6 +39,30 @@ def register(name: str) -> None:
         app, ["add", name, "--kind", "mock", "--bind", f"127.0.0.1:{free_port()}"]
     )
     assert added.exit_code == 0, added.output
+
+
+def pid_file() -> Path:
+    return worker_state_dir(POOL_STATE_NAME) / "pid"
+
+
+def start_pool() -> int:
+    bind = os.environ["ACPW_POOL_BIND"]
+    up = runner.invoke(app, ["pool", "up", "--bind", bind])
+    assert up.exit_code == 0, up.output
+    serving = json.loads(up.output)["pid"]
+    assert isinstance(serving, int) and serving > 0
+    return serving
+
+
+def reap(pid: int | None) -> None:
+    if not pid:
+        return
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.kill(pid, sig)
+        except OSError:
+            return
+        time.sleep(0.2)
 
 
 def test_pool_drives_two_children_over_one_connection(tmp_path: Path, monkeypatch) -> None:
@@ -320,3 +347,78 @@ def test_many_sessions_fan_out_across_children(tmp_path: Path, monkeypatch) -> N
             client.close()
     finally:
         runner.invoke(app, ["pool", "down"])
+
+
+def test_pool_down_kills_the_health_pid_when_the_pid_file_is_gone(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Concurrent cold start can leave no usable pid file: a loser overwrites it
+    and dies, or the already-live branch never writes one. /health still names
+    the process that won the port; down must signal that pid."""
+    isolate(tmp_path, monkeypatch)
+    serving = start_pool()
+    try:
+        pid_file().unlink()
+        down = runner.invoke(app, ["pool", "down"])
+        assert down.exit_code == 0, down.output
+        body = json.loads(down.output)
+        assert serving in body["signaled"], body
+        assert body["live"] is False, body
+    finally:
+        reap(serving)
+
+
+def test_pool_down_kills_the_health_pid_when_the_pid_file_names_a_dead_process(
+    tmp_path: Path, monkeypatch
+) -> None:
+    isolate(tmp_path, monkeypatch)
+    serving = start_pool()
+    try:
+        stale = subprocess.Popen([sys.executable, "-c", "pass"])
+        stale.wait()
+        pid_file().write_text(f"{stale.pid}\n")
+        down = runner.invoke(app, ["pool", "down"])
+        assert down.exit_code == 0, down.output
+        body = json.loads(down.output)
+        assert serving in body["signaled"], body
+        assert body["live"] is False, body
+    finally:
+        reap(serving)
+
+
+def test_pool_up_rewrites_the_pid_file_from_health_when_already_live(
+    tmp_path: Path, monkeypatch
+) -> None:
+    isolate(tmp_path, monkeypatch)
+    serving = start_pool()
+    try:
+        pid_file().unlink()
+        again = runner.invoke(app, ["pool", "up", "--bind", os.environ["ACPW_POOL_BIND"]])
+        assert again.exit_code == 0, again.output
+        body = json.loads(again.output)
+        assert body["already"] is True
+        assert int(pid_file().read_text().strip()) == serving
+        assert body["pid"] == serving
+    finally:
+        runner.invoke(app, ["pool", "down"])
+        reap(serving)
+
+
+def test_concurrent_cold_start_down_stops_the_winner(tmp_path: Path, monkeypatch) -> None:
+    """Several pool_up at once: losers overwrite the pid file, the winner keeps
+    the port. down must still find that winner via /health."""
+    isolate(tmp_path, monkeypatch)
+    serving: int | None = None
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            started = list(pool.map(lambda _: pool_up(), range(4)))
+        pids = {row.pid for row in started if row.pid}
+        assert pids, started
+        serving = pool_status().pid
+        assert serving in pids
+        stopped = pool_down()
+        assert serving in stopped.signaled, stopped
+        assert stopped.live is False, stopped
+    finally:
+        pool_down()
+        reap(serving)

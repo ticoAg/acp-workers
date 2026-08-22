@@ -13,7 +13,7 @@ ws://127.0.0.1:48190/ws?server-key=<secret>
 GET /health
 ```
 
-- Secret 在 `~/.local/state/acp-workers/_pool/secret`，pid 在 `.../pid`，日志在 `.../server.log`，daemon 实际起在哪个 bind 记在 `.../bind`，耐久 session 映射在 `.../sessions.json`。
+- Secret 在 `~/.local/state/acp-workers/_pool/secret`，pid 在 `.../pid`，日志在 `.../server.log`，daemon 实际起在哪个 bind 记在 `.../bind`，耐久 session 映射在 `.../sessions.json`。pid 文件可能被并发冷启动的输家覆盖；`/health` 的 `pid` 才是真正在服务的进程。`pool_down` 在 pid 文件不可用时回退到它；`pool_up` 在 health 起来后（含 already）把正确 pid 写回文件。
 - Bind 发现顺序：环境变量 `ACPW_POOL_BIND`，然后 `bind` state 文件，最后 `DEFAULT_POOL_BIND`。`pool_up()` 写这个文件，其余都读它，所以 pool 起在非默认端口时仍能被找到。
 - `/ws` 上 `server-key` 错或缺失 → HTTP 401，与每个 worker 的独立 gateway 相同。
 - `GET /health` → `{"ok":true,"kind":"pool","pid":N,"workers":[{"name","kind","alive","pid","sessions"}],"sessions":N}`。两处 session 计数都是 live 绑定，不是耐久记录，所以 child 死后会掉到零，尽管那些 session 仍可续。
@@ -113,7 +113,9 @@ def pool_ping(name: str) -> PingResponse: ...
 def pool_run(params: ExecParams) -> ExecResponse: ...
 ```
 
-`pool_up` 不带 bind 时，解析方式和其余代码相同；把 daemon 起在其余代码不会去看的地址，只会得到一个谁都找不到的 pool。
+`pool_up` 不带 bind 时，解析方式和其余代码相同；把 daemon 起在其余代码不会去看的地址，只会得到一个谁都找不到的 pool。health 起来后必须把 `/health` 报告的 pid 写回 pid 文件，already 分支也一样——并发冷启动的输家可能已经把文件写成一个已死的 pid，或不写。
+
+`pool_down` 先看 `/health` 的 pid，文件里的 pid 只在 health 不可达时使用。只信文件的话，文件一旦被覆盖或丢失，daemon 就关不掉。
 
 `pool_ping` 必须碰到指定的 worker，而不是挡在前面的 daemon：发 `worker/up`，报告 child 的 `agentInfo` 和 `protocolVersion`。只和 pool 握手证明不了调用方要的那个 agent，还会把坏掉的 agent 二进制报成健康。
 

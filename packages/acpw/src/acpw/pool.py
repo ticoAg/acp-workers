@@ -189,6 +189,29 @@ def pool_live(timeout: float = 1.0) -> bool:
     return code == 200
 
 
+def _health_pid(timeout: float = 1.0) -> int | None:
+    try:
+        code, payload = _health(_resolved_bind(), timeout)
+    except OSError:
+        return None
+    if code != 200:
+        return None
+    raw = payload.get("pid")
+    return raw if isinstance(raw, int) and raw > 0 else None
+
+
+def _record_pid(pid: int | None) -> None:
+    if not isinstance(pid, int) or pid <= 0:
+        return
+    (_state() / "pid").write_text(str(pid) + "\n")
+
+
+def _serving_pid() -> int | None:
+    # /health names the process that actually bound the port. The pid file can
+    # name a concurrent cold-start loser (already dead, or still exiting).
+    return _health_pid() or read_pid(_state() / "pid")
+
+
 def pool_status() -> PoolStatus:
     bind = _resolved_bind()
     log = str(_state() / "server.log")
@@ -225,9 +248,11 @@ def pool_up(
     log_path = state / "server.log"
     if pool_live():
         current = pool_status()
+        _record_pid(current.pid)
         if workers:
             _prewarm(pool_url(secret), workers, cwd, timeout)
             current = pool_status()
+            _record_pid(current.pid)
         return PoolStartResponse(
             bind=current.bind,
             url=current.url,
@@ -260,6 +285,7 @@ def pool_up(
         except OSError:
             code, payload = 0, {}
         if code == 200:
+            _record_pid(payload.get("pid") or pid)
             break
         time.sleep(0.25)
     if code != 200:
@@ -268,6 +294,7 @@ def pool_up(
     if workers:
         _prewarm(url, workers, cwd, max(1.0, deadline - time.time()))
         _, payload = _health(bind, 1.0)
+        _record_pid(payload.get("pid") or pid)
     return PoolStartResponse(
         bind=bind,
         url=url,
@@ -312,7 +339,7 @@ def pool_stop_worker(name: str) -> WorkerStopResponse:
 
 
 def pool_down() -> PoolStopResponse:
-    pid = read_pid(_state() / "pid")
+    pid = _serving_pid()
     killed: list[int] = []
     if pid:
         try:
