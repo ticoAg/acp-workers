@@ -129,6 +129,14 @@ ZH_CN: dict[str, str] = {
     "Print the current CLI output format.": "打印当前 CLI 输出格式。",
     "Save the CLI output format.": "保存 CLI 输出格式。",
     "Format to save: markdown or json.": "要保存的格式：markdown 或 json。",
+    "Show or save the kinds this machine may dispatch to.": ("查看或保存本机允许派发的 kind。"),
+    "Print the allowed worker kinds.": "打印允许派发的 worker kind。",
+    "Replace the allow list and save it.": "替换允许列表并保存。",
+    "Kinds to allow, such as grok or cursor.": "允许的 kind，例如 grok 或 cursor。",
+    "Add kinds to the allow list.": "把 kind 加入允许列表。",
+    "Kinds to add.": "要加入的 kind。",
+    "Remove kinds from the allow list.": "从允许列表里去掉 kind。",
+    "Kinds to remove.": "要去掉的 kind。",
     "One resident daemon, one port, many children.": ("一个常驻 daemon，一个端口，多个 child。"),
     "Start the pool daemon if it is not live.": "若 pool daemon 未在运行则启动它。",
     "Bind host:port for the pool daemon.": "pool daemon 的 bind host:port。",
@@ -184,6 +192,8 @@ ZH_CN: dict[str, str] = {
     "unsupported output format {value}; choose {supported}": (
         "不支持的输出格式 {value}；可选 {supported}"
     ),
+    "kind {kind} is not allowed": "kind {kind} 不在允许列表里",
+    "unknown kind {kind}; choose {supported}": ("未知 kind {kind}；可选 {supported}"),
     # install
     "acpw not on PATH; run: uv tool install --editable <this-repo>": (
         "PATH 上找不到 acpw；运行: uv tool install --editable <this-repo>"
@@ -358,6 +368,14 @@ ZH_TW: dict[str, str] = {
     "Print the current CLI output format.": "列印目前 CLI 輸出格式。",
     "Save the CLI output format.": "儲存 CLI 輸出格式。",
     "Format to save: markdown or json.": "要儲存的格式：markdown 或 json。",
+    "Show or save the kinds this machine may dispatch to.": ("查看或儲存本機允許派發的 kind。"),
+    "Print the allowed worker kinds.": "列印允許派發的 worker kind。",
+    "Replace the allow list and save it.": "替換允許列表並儲存。",
+    "Kinds to allow, such as grok or cursor.": "允許的 kind，例如 grok 或 cursor。",
+    "Add kinds to the allow list.": "把 kind 加入允許列表。",
+    "Kinds to add.": "要加入的 kind。",
+    "Remove kinds from the allow list.": "從允許列表裡去掉 kind。",
+    "Kinds to remove.": "要去掉的 kind。",
     "One resident daemon, one port, many children.": ("一個常駐 daemon，一個埠，多個 child。"),
     "Start the pool daemon if it is not live.": "若 pool daemon 未在執行則啟動它。",
     "Bind host:port for the pool daemon.": "pool daemon 的 bind host:port。",
@@ -412,6 +430,8 @@ ZH_TW: dict[str, str] = {
     "unsupported output format {value}; choose {supported}": (
         "不支援的輸出格式 {value}；可選 {supported}"
     ),
+    "kind {kind} is not allowed": "kind {kind} 不在允許列表裡",
+    "unknown kind {kind}; choose {supported}": ("未知 kind {kind}；可選 {supported}"),
     "acpw not on PATH; run: uv tool install --editable <this-repo>": (
         "PATH 上找不到 acpw；執行: uv tool install --editable <this-repo>"
     ),

@@ -78,13 +78,96 @@ sequenceDiagram
 acpw doctor && acpw ls
 acpw up grok --cwd "$PWD"
 acpw run grok -f /tmp/task.txt
-acpw run claude -f /tmp/other.txt &
 acpw run grok -f /tmp/next.txt --session-id acpw-s…
 acpw down grok    # 只停一个 child
 acpw down         # 停 daemon
 ```
 
+只派 `acpw ls` 里 `enabled` 且 `allowed` 的 worker。本机允许的 kind：`acpw allow set grok cursor`。
+
 默认绑 `0.0.0.0:48190`，客户端拨回环。Child 是 always-approve，`server-key` 明文过线——别把端口放到不可信网络。`acpw selfcheck` 会报 `exposure` 告警。
+
+## 和 [acp-devtools](https://github.com/maksugr/acp-devtools) 合用
+
+两者不互相替代，也没有代码耦合。`acpw` 负责派发；[acp-devtools](https://github.com/maksugr/acp-devtools) 负责把 ACP 帧抓下来看。接缝是 daemon 拉 child 的那条 `stdio_argv`。
+
+| | 本项目 | acp-devtools |
+| --- | --- | --- |
+| 角色 | Host 眼里的一个 ACP agent：一条 WebSocket，底下挂多个 child | editor/client 和 **一个** agent 之间的透明 stdio 代理 |
+| 解决 | 并发派发、公开 `session_id` 续上、三套 id 翻译 | 时间线、spec 校验、延迟、两次会话 diff、回放、只读 MCP |
+| 入口 | `ws://127.0.0.1:48190/ws?server-key=…` | `acp-devtools proxy …`（stdio）。Inspector 另有自己的 WS，不是 ACP |
+
+两套 WebSocket 不要混：`48190` 是 ACP；devtools 的 ephemeral 端口只给 UI 推帧。
+
+```mermaid
+flowchart LR
+    Host["Host / acpw"]
+    Mux["Pool mux  :48190"]
+    Proxy["acp-devtools proxy"]
+    Child["stdio child"]
+    UI["ui  :3737"]
+    DB[("captures.db")]
+
+    Host -->|"ACP WebSocket"| Mux
+    Mux -->|"stdio"| Proxy
+    Proxy -->|"stdio"| Child
+    Proxy --> DB
+    Proxy -.->|"inspector WS"| UI
+```
+
+### 接法：包一层 proxy
+
+`acpw add` 不写 `stdio_argv`。在 `~/.config/acp-workers/registry.json` 里覆盖，然后让 daemon 重新 spawn 该 child：
+
+```json
+"grok": {
+  "kind": "grok",
+  "enabled": true,
+  "stdio_argv": [
+    "acp-devtools", "proxy", "--session-name", "grok",
+    "--", "grok", "agent", "--always-approve", "--no-leader", "stdio"
+  ]
+}
+```
+
+`--` 不能省：后面的 `--always-approve` 否则会被当成 proxy 自己的旗标。Claude / Codex / Cursor 同样包，把 `--` 后面换成「支持的 Agent」表里的 pool 子进程命令。`acp-devtools` 要在 `PATH` 上（`npm install -g acp-devtools`）。改完：
+
+```bash
+acpw down grok
+acpw up grok --cwd "$PWD"
+acp-devtools ui          # http://127.0.0.1:3737/ ，会发现这条 live capture
+acpw run grok -f /tmp/task.txt
+acp-devtools list
+acp-devtools inspect 23 --method session/prompt
+acp-devtools validate 23
+acp-devtools stats 23 --by-method
+```
+
+`acpw doctor` 仍查原来的 agent 二进制，不查 proxy。spawn 失败看 `_pool/server.log` 里有没有 `acp-devtools: spawned`。proxy 的 stderr 进这份日志；不要开 `--log pretty`，否则每一帧都打进去。`--no-pool` 的 claude / codex / cursor 走同一条 `stdio_argv`，同样能包；`acpw up grok --no-pool` 是 `grok agent serve`（原生 WS），包不住。
+
+### 抓包里能看见什么
+
+Proxy 夹在 **daemon ↔ child**，不是 host ↔ daemon。因此：
+
+- **能看见**：child 的 `initialize`（`clientInfo` 是 `acpw-pool`）、`session/new`、prompt、流式 chunk、tool call、`session/request_permission`。`_meta` 原样转给 child，所以帧里有 `_meta.worker`。
+- **看不见**：host 侧的公开 `session_id`（`acpw-s…`）、daemon 自己的 `initialize`（`agentInfo: acpw-pool`）、`worker/up` / `worker/down`、host ↔ daemon 的 id 重映射。
+- 对照公开 id 和 child 原生 id：`~/.local/state/acp-workers/_pool/sessions.json` 是 `acpw-s… → {worker, native, cwd}`。
+- 一个 child 活多久，devtools 那条 capture 就多长。多次 `acpw run grok` 叠在同一条里；要切开就 `acpw down grok` 再起。
+
+抓包会把 prompt 和 tool 结果写进 `~/.acp-devtools/captures.db`。导出分享前用 `acp-devtools export`（默认脱敏 auth header，**不**脱敏文件内容和 prompt）。
+
+### 其它合用方式
+
+| 目的 | 做法 |
+| --- | --- |
+| 同一 prompt 对比两个 agent | 两个 child 都包上，各 `acpw run` 一次，`acp-devtools diff <a> <b>` |
+| 分清是 pool 的问题还是 agent 的问题 | 绕开 pool，直接 `acp-devtools mock-editor --script golden.json -- grok agent --always-approve --no-leader stdio` |
+| 测 mux、不烧 token | registry 里把某个 worker 的 `stdio_argv` 设成 `acp-devtools mock-agent --session N`（录音必须含 daemon 那次 `initialize`） |
+| 让 host 自己查抓包 | 给 host 配 `acp-devtools mcp`（stdio、只读）。这和 `acpw` 无关，skill 也不管 MCP |
+
+合不上的：Zed / JetBrains 经 acp-devtools 打到 pool（编辑器要 stdio，pool 是 WebSocket）；用 devtools 当 `48190` 的 ACP 客户端；指望抓包里出现 `acpw-s…`。Pool 本身的正确性继续靠 `acpw selfcheck` 和本仓库测试。
+
+默认不要包 proxy。排障、对比 agent、怀疑线路不合 spec 时再包。
 
 ## 安装
 

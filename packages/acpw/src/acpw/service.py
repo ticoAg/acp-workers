@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from acpw import __version__
+from acpw import allow as allow_policy
 from acpw.adapters import ADAPTERS
 from acpw.client import AcpClient
 from acpw.i18n import t
@@ -22,8 +23,9 @@ from acpw.registry import (
     load_registry,
     pid_alive,
     read_pid,
+    registry_kinds,
     remove_worker,
-    resolve_worker,
+    require_dispatchable,
     secret_for,
 )
 from acpw.types import (
@@ -55,6 +57,8 @@ def status() -> WorkerStatusList:
     spec_map = ADAPTERS
     pool = pool_status()
     pooled = {row.name: row for row in pool.workers} if pool.live else {}
+    extra = registry_kinds()
+    policy = allow_policy.current(extra=extra)
     rows: list[WorkerStatus] = []
     for name, entry in load_registry().workers.items():
         kind = entry.kind or name
@@ -71,6 +75,7 @@ def status() -> WorkerStatusList:
                 name=name,
                 kind=kind,
                 enabled=entry.enabled,
+                allowed=allow_policy.kind_allowed(kind, extra=extra),
                 transport=transport,
                 bind=bind,
                 live=in_pool or bool(live and live.live),
@@ -87,6 +92,8 @@ def status() -> WorkerStatusList:
         listening_defaults=scan_listening(),
         processes=process_map(),
         pool=pool,
+        allow=policy.allow,
+        allow_source=policy.source,
     )
 
 
@@ -170,11 +177,7 @@ def expand_stdio(argv: list[str]) -> list[str]:
 
 
 def start(name: str, cwd: str | None = None, timeout: float = 45) -> WorkerStartResponse:
-    entry, spec = resolve_worker(name)
-    if not entry.enabled:
-        raise AcpwError(
-            ErrorResponse(error=t("{name} is disabled in registry", name=name), name=name)
-        )
+    entry, spec = require_dispatchable(name)
     if entry.url:
         live = probe(entry.bind or "127.0.0.1:0", secret_for(name, entry))
         if not live.live:
@@ -320,7 +323,7 @@ def _collect_text(notes: list[dict]) -> tuple[str, list[ToolCallOut]]:
 
 
 def ping(name: str) -> PingResponse:
-    entry, spec = resolve_worker(name)
+    entry, spec = require_dispatchable(name)
     bind = bind_of(entry, spec)
     secret = secret_for(name, entry)
     if not bind:
@@ -355,7 +358,7 @@ def ping(name: str) -> PingResponse:
 
 
 def run(params: ExecParams) -> ExecResponse:
-    entry, spec = resolve_worker(params.name)
+    entry, spec = require_dispatchable(params.name)
     bind = bind_of(entry, spec)
     secret = secret_for(params.name, entry)
     url = params.url or entry.url or (ws_url(bind, secret) if bind else None)

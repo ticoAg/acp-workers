@@ -6,6 +6,16 @@
 
 ## [未发布]
 
+## [0.6.5] - 2026-08-23
+
+### 新增
+
+- `acpw allow`：本机允许派发的 worker kind 写入 `config.json`。`acpw allow set grok cursor` 替换列表，`allow add` / `allow rm` 增减，`acpw allow` / `allow get` 查看。`ACPW_ALLOW=grok,cursor` 覆盖一次调用。未列出的 kind（含同 kind 的 `claude-b` 这类名字）在 `run` / `ping` / `up` 和 daemon spawn 时被拒绝。`acpw ls` 增加 `allowed` 列和 `## allow`。registry 里 `enabled: false` 仍然单独生效。
+
+### 文档
+
+- README 补充与 [acp-devtools](https://github.com/maksugr/acp-devtools) 的合用方式：接缝在 pool child 的 `stdio_argv`，以及 host↔daemon 那一跳抓不到等边界。
+
 ## [0.6.4] - 2026-08-23
 
 ### 变更
@@ -116,7 +126,8 @@
 - `acp-workers` skill：派发流程、线路协议参考、安装参考、registry 示例。
 - `scripts/ensure-acpw.sh`：幂等 CLI 引导，带版本下限、`--update`、`--force`、`--completion`。
 
-[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.4...HEAD
+[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.5...HEAD
+[0.6.5]: https://github.com/ticoAg/acp-workers/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/ticoAg/acp-workers/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/ticoAg/acp-workers/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/ticoAg/acp-workers/compare/v0.6.1...v0.6.2

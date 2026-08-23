@@ -9,6 +9,7 @@ import typer
 from typer.core import TyperGroup
 
 from acpw import __version__
+from acpw import allow as allow_policy
 from acpw import output as out
 from acpw.adapters import ADAPTERS, resolve_stdio_argv
 from acpw.daemon import run_daemon
@@ -35,7 +36,7 @@ from acpw.pool import (
     pool_stop_worker,
     pool_up,
 )
-from acpw.registry import AcpwError, load_registry
+from acpw.registry import AcpwError, load_registry, require_dispatchable
 from acpw.selfcheck import run_selfcheck
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
 from acpw.types import (
@@ -297,6 +298,7 @@ def cmd_ping(
 ) -> None:
     """ACP initialize against a live worker."""
     try:
+        require_dispatchable(name)
         via_pool = use_pool(name, url=None, choice=pool)
         out.emit(pool_ping(name) if via_pool else ping(name))
     except Exception as exc:
@@ -346,6 +348,7 @@ def cmd_run(
         timeout=timeout,
     )
     try:
+        require_dispatchable(name)
         via_pool = use_pool(name, url=url, choice=pool)
         out.emit(pool_run(params) if via_pool else run(params))
     except Exception as exc:
@@ -490,6 +493,75 @@ def cmd_output_set(
     out.save_output(chosen)
     out.apply(out.OutputState(format=chosen, source="config", saved=chosen))
     emit_output()
+
+
+def emit_allow() -> None:
+    out.emit(allow_policy.show())
+
+
+allow_app = typer.Typer(
+    name="allow",
+    help="Show or save the kinds this machine may dispatch to.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+    pretty_exceptions_enable=False,
+)
+app.add_typer(allow_app)
+
+
+@allow_app.callback(invoke_without_command=True)
+def allow_root(ctx: typer.Context) -> None:
+    """Show or save the kinds this machine may dispatch to."""
+    if ctx.invoked_subcommand is None:
+        emit_allow()
+
+
+@allow_app.command("get")
+def cmd_allow_get() -> None:
+    """Print the allowed worker kinds."""
+    emit_allow()
+
+
+@allow_app.command("set")
+def cmd_allow_set(
+    kinds: Annotated[
+        list[str],
+        typer.Argument(help="Kinds to allow, such as grok or cursor."),
+    ],
+) -> None:
+    """Replace the allow list and save it."""
+    try:
+        out.emit(allow_policy.set_kinds(kinds))
+    except Exception as exc:
+        fail(exc)
+
+
+@allow_app.command("add")
+def cmd_allow_add(
+    kinds: Annotated[
+        list[str],
+        typer.Argument(help="Kinds to add."),
+    ],
+) -> None:
+    """Add kinds to the allow list."""
+    try:
+        out.emit(allow_policy.add_kinds(kinds))
+    except Exception as exc:
+        fail(exc)
+
+
+@allow_app.command("rm")
+def cmd_allow_rm(
+    kinds: Annotated[
+        list[str],
+        typer.Argument(help="Kinds to remove."),
+    ],
+) -> None:
+    """Remove kinds from the allow list."""
+    try:
+        out.emit(allow_policy.remove_kinds(kinds))
+    except Exception as exc:
+        fail(exc)
 
 
 pool_app = typer.Typer(

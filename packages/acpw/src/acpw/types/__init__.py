@@ -1,4 +1,5 @@
 from acpw.types.adapter import Adapter
+from acpw.types.allow import AllowResponse
 from acpw.types.doctor import DoctorAdapter, DoctorResponse
 from acpw.types.error import ErrorResponse
 from acpw.types.install import InstallResponse, UninstallResponse
@@ -26,6 +27,7 @@ from acpw.types.worker import (
 
 __all__ = [
     "Adapter",
+    "AllowResponse",
     "CheckItem",
     "CheckLevel",
     "DoctorAdapter",

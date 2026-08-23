@@ -180,6 +180,18 @@ def _render_ls(model: WorkerStatusList) -> str:
         lines.append("## pool")
         lines.append("")
         lines.extend(_render_mapping(pool, skip={"ok"}, depth=3))
+    allow = data.get("allow")
+    source = data.get("allow_source")
+    if allow is not None or source:
+        lines.append("")
+        lines.append("## allow")
+        lines.append("")
+        if source:
+            lines.append(f"source: {_md_value(source)}")
+        if isinstance(allow, list) and allow:
+            lines.append(f"kinds: {_join_scalars(allow)}")
+        else:
+            lines.append("kinds: (none)")
     lines.append("")
     lines.append("## workers")
     lines.append("")

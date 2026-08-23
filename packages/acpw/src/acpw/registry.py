@@ -4,6 +4,7 @@ import secrets
 import urllib.parse
 from pathlib import Path
 
+from acpw import allow as allow_policy
 from acpw.adapters import ADAPTERS
 from acpw.i18n import t
 from acpw.io import load_json, save_json
@@ -79,6 +80,51 @@ def resolve_worker(name: str) -> tuple[Worker, Adapter]:
     if not entry.bind:
         entry.bind = bind
     return entry, spec
+
+
+def registry_kinds(data: Registry | None = None) -> list[str]:
+    rows = data.workers if data is not None else load_registry().workers
+    return [entry.kind or name for name, entry in rows.items()]
+
+
+def worker_kind_aliases(data: Registry | None = None) -> dict[str, str]:
+    rows = data.workers if data is not None else load_registry().workers
+    return {name: entry.kind or name for name, entry in rows.items()}
+
+
+def dispatch_denied(name: str) -> str | None:
+    """English protocol reason, or None if this worker may be dispatched."""
+    data = load_registry()
+    if name not in data.workers:
+        return f"unknown worker {name}"
+    entry = data.workers[name]
+    extra = registry_kinds(data)
+    if not entry.enabled:
+        return f"worker {name} is disabled in registry"
+    kind = entry.kind or name
+    if not allow_policy.kind_allowed(kind, extra=extra):
+        return f"kind {kind} is not allowed"
+    return None
+
+
+def require_dispatchable(name: str) -> tuple[Worker, Adapter]:
+    entry, spec = resolve_worker(name)
+    denied = dispatch_denied(name)
+    if denied is None:
+        return entry, spec
+    extra = registry_kinds()
+    if not entry.enabled:
+        raise AcpwError(
+            ErrorResponse(error=t("{name} is disabled in registry", name=name), name=name)
+        )
+    kind = entry.kind or name
+    raise AcpwError(
+        ErrorResponse(
+            error=t("kind {kind} is not allowed", kind=kind),
+            name=name,
+            known=allow_policy.current(extra=extra).allow,
+        )
+    )
 
 
 def secret_for(name: str, entry: Worker) -> str | None:

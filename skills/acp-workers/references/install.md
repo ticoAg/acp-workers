@@ -86,7 +86,7 @@ acpw install   # bash 补全 → ~/.local/share/bash-completion/completions/acpw
 | 路径 | 内容 | 覆盖变量 |
 | --- | --- | --- |
 | `~/.config/acp-workers/registry.json` | worker 配置，结构见 [../assets/registry.example.json](../assets/registry.example.json) | `ACPW_CONFIG_DIR` |
-| `~/.config/acp-workers/config.json` | CLI 语言等用户偏好（`acpw lang set`） | `ACPW_CONFIG_DIR` |
+| `~/.config/acp-workers/config.json` | CLI 语言、输出格式、允许派发的 kind（`acpw lang set` / `output set` / `allow set`） | `ACPW_CONFIG_DIR` |
 | `~/.local/state/acp-workers/<name>/` | secret、pid、日志 | `ACPW_STATE_DIR` |
 | `~/.local/state/acp-workers/_pool/` | pool daemon 的 secret、pid、日志、bind、`sessions.json` | `ACPW_STATE_DIR`；bind 另可用 `ACPW_POOL_BIND` |
 

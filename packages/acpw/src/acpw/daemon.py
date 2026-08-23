@@ -26,7 +26,7 @@ from typing import Any
 from acpw import __version__
 from acpw.adapters import ADAPTERS, resolve_stdio_argv
 from acpw.paths import POOL_STATE_NAME, worker_state_dir
-from acpw.registry import AcpwError, load_registry, resolve_worker
+from acpw.registry import AcpwError, dispatch_denied, load_registry, resolve_worker
 from acpw.service import expand_stdio
 from acpw.types import PoolWorker
 from acpw.ws import dumps, split_bind, ws_accept, ws_recv, ws_send
@@ -419,6 +419,9 @@ class Pool:
     # ---- children --------------------------------------------------------------------
 
     def ensure_child(self, name: str, cwd: str | None) -> tuple[PooledChild, bool]:
+        denied = dispatch_denied(name)
+        if denied:
+            raise RouteError(ERR_ROUTE, denied)
         with self.lock:
             child = self.children.get(name)
             if child is not None and child.alive():
@@ -443,8 +446,9 @@ class Pool:
             entry, spec = resolve_worker(name)
         except AcpwError as exc:
             raise RouteError(ERR_ROUTE, f"unknown worker {name}") from exc
-        if not entry.enabled:
-            raise RouteError(ERR_ROUTE, f"worker {name} is disabled in registry")
+        denied = dispatch_denied(name)
+        if denied:
+            raise RouteError(ERR_ROUTE, denied)
         kind = entry.kind or name
         adapter = ADAPTERS.get(kind, spec)
         argv = expand_stdio(resolve_stdio_argv(entry.stdio_argv, adapter))

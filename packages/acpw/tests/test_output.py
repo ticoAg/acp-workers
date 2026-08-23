@@ -113,7 +113,7 @@ def test_render_ls_puts_pool_first() -> None:
     assert "listening_defaults" not in body
     assert "## processes" not in body
     assert "registry: `/home/tico/.config/acp-workers/registry.json`" in body
-    assert "| grok | grok | true | native-ws |" in body
+    assert "| grok | grok | true | true | native-ws |" in body
     assert "via" in body.split("## workers", 1)[1]
 
 

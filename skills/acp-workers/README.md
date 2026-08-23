@@ -53,15 +53,7 @@ acpw run grok -f /tmp/next.txt --session-id <session_id>
 acpw down
 ```
 
-`acpw run` / `acpw ping` 在需要时会自己起 socket。第二个 grok 进程用 `acpw add grok-b --kind grok`。
-
-```bash
-acpw up
-acpw run claude -f /tmp/task.txt
-acpw run cursor -f /tmp/other.txt &
-acpw down claude
-acpw down
-```
+`acpw run` / `acpw ping` 在需要时会自己起 socket。第二个 grok 进程用 `acpw add grok-b --kind grok`。只派 `acpw ls` 里 `allowed` 且 `enabled` 的 worker：`acpw allow set grok cursor` 写入本机允许的 kind。
 
 `--no-pool` 走该 worker 自己的 gateway；`--url` 指名某个 socket，同样绕开 pool。
 

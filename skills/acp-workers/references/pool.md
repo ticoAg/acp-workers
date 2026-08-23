@@ -4,7 +4,7 @@
 
 ```bash
 acpw up                              # 只起 WebSocket
-acpw up grok claude --cwd "$PWD"     # 顺带预热这些 child
+acpw up grok claude --cwd "$PWD"     # 顺带预热这些 child（须在 `acpw allow` 里）
 acpw run grok -f /tmp/a.txt          # 返回 session_id
 acpw run claude -f /tmp/b.txt &
 acpw run grok -f /tmp/c.txt --session-id acpw-s…
@@ -106,7 +106,7 @@ Pool 发给你的 `sessionId` 是 daemon 自己的公开 id，不是 child 内�
 
 | 码 | 含义 | 做法 |
 | --- | --- | --- |
-| `-32602` | 缺 `_meta.worker`、未知 worker、或这条 method 无法路由 | 确认 `session/new` 带了 [registry](../assets/registry.example.json) 里的 `name`；其它 method 必须带已经拿到的 `sessionId` |
+| `-32602` | 缺 `_meta.worker`、未知 worker、disabled、kind 不在 allow 列表、或这条 method 无法路由 | 确认 `session/new` 带了 [registry](../assets/registry.example.json) 里的 `name`；其它 method 必须带已经拿到的 `sessionId`。本机允许的 kind 看 `acpw allow` |
 | `-32001` | 未知 session；被另一条活连接占用（`session <id> is held by another client`）；或 child 不能续（`worker <name> cannot resume sessions (loadSession not advertised)`） | 核对 id；等占用方断开；不要对没广告 `loadSession` 的 worker 续 |
 | `-32000` | 写给 child 失败，或请求做到一半 child 退了 | 看 `_pool/server.log`，`acpw ls` 看 `pool` 和 `via`，必要则 `acpw down` / `acpw up` |
 
@@ -117,6 +117,7 @@ Pool 发给你的 `sessionId` 是 daemon 自己的公开 id，不是 child 内�
 | `acpw ls` 的 `pool.live` 为假 | `acpw run` / `acpw ping` 会自己起 daemon；要预热就 `acpw up NAME`。读 `_pool/server.log` |
 | HTTP `401` | URL 带 `server-key`，值来自 `_pool/secret`。若 `/health` 是 live 却 401：daemon 是对着另一份 state 起的，按 CLI 提示 `acpw down` 或改 `ACPW_STATE_DIR` |
 | `-32602` `unknown worker` | 先 `acpw ls` / `acpw add`；`_meta.worker` 用登记名 |
+| `-32602` `kind … is not allowed` | 该 kind 不在本机允许列表；看 `acpw allow` |
 | `-32001` 未知 session | id 不在 `sessions.json` / 内存里；重新 `session/new` |
 | `-32001` held by another client | 等那条连接断开后再续 |
 | `-32001` cannot resume sessions | 该 worker 没广告 `loadSession`；续不了，别指望空白 session 顶上 |

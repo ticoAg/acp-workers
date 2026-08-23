@@ -1,11 +1,11 @@
 ---
 name: acp-workers
-description: "通过一条常驻 WebSocket 把编码任务派给多个 agent 进程（grok/claude/codex/cursor）。用 --session-id 续会话。Host 规划、限定范围并验收；worker 只执行。USE FOR: acpw up/run/down, --session-id, 48190, 一个 WebSocket 多个 agent, 并发派发, grok agent stdio, ACP websocket, 常驻 ACP. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
+description: "通过一条常驻 WebSocket 把编码任务派给本机允许的 agent 进程（grok/claude/codex/cursor）。用 acpw allow 配置允许的 kind。用 --session-id 续会话。Host 规划、限定范围并验收；worker 只执行。USE FOR: acpw up/run/down, acpw allow, --session-id, 48190, 一个 WebSocket 多个 agent, 并发派发, grok agent stdio, ACP websocket, 常驻 ACP. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
 license: MIT
 compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
-  version: "0.6.4"
+  version: "0.6.5"
 ---
 
 # ACP Workers
@@ -16,7 +16,7 @@ Host 只做规划、派发、验收。执行面是**一个**常驻 WebSocket（`
 
 ## 何时使用
 
-- 把一件可验收的编码任务派给 grok / claude / codex / cursor
+- 把一件可验收的编码任务派给 `acpw allow` 允许的 worker
 - 一条 WebSocket 同时驱动多个 agent
 - 用上次返回的 `session_id` 把对话续上
 
@@ -55,13 +55,13 @@ bash scripts/ensure-acpw.sh
 acpw doctor && acpw ls
 ```
 
-`ls` 里 `## pool` 的 `live: true` 和 workers 表的 `via` 为 `pool` 才是原生路径。每个 worker 自己的端口空着是正常的。
+`ls` 里 `## pool` 的 `live: true` 和 workers 表的 `via` 为 `pool` 才是原生路径。每个 worker 自己的端口空着是正常的。**只派 `enabled` 且 `allowed` 都为 true 的 worker。** `## allow` / `acpw allow` 是本机允许的 kind；改它：`acpw allow set grok cursor`，或 `acpw allow rm claude`。
 
 ### 步骤 2：起 socket
 
 ```bash
 acpw up                              # 只起 WebSocket
-acpw up grok claude --cwd "$PWD"     # 顺带预热这些 child
+acpw up grok --cwd "$PWD"            # 顺带预热这些 child（须在 allow 里）
 ```
 
 ### 步骤 3：写 prompt
@@ -72,11 +72,10 @@ acpw up grok claude --cwd "$PWD"     # 顺带预热这些 child
 
 ```bash
 acpw run grok -f /tmp/a.txt
-acpw run claude -f /tmp/b.txt &
 acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 ```
 
-第一次 `run` 返回的 `session_id` 留下来。连接断了、child 死了、daemon 重启了，把这个 id 再贴回去就能续。对话历史回不回得来，取决于那个 agent 是否广告并执行 `session/load`。第二个 grok 进程：`acpw add grok-b --kind grok`。默认超时 600s。
+NAME 必须是 `ls` 里 `allowed` 且 `enabled` 的 worker。第一次 `run` 返回的 `session_id` 留下来。连接断了、child 死了、daemon 重启了，把这个 id 再贴回去就能续。对话历史回不回得来，取决于那个 agent 是否广告并执行 `session/load`。第二个 grok 进程：`acpw add grok-b --kind grok`。默认超时 600s。
 
 ### 步骤 5：验收
 
@@ -88,12 +87,13 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | --- | --- |
 | `version` | 打印已装版本、Python、包路径（也可 `acpw --version`） |
 | `selfcheck` | 九项自检 + mock 往返；有 `fail` 则退出 1（`--no-live` 只查静态项） |
-| `ls` | 配置 + 探活；含 `pool` 字段（别名 `status`） |
+| `ls` | 配置 + 探活；含 `pool` 和 `allow`（别名 `status`） |
 | `doctor` | 检查适配器二进制是否在 PATH |
-| `up` / `down` | 起停那一个 WebSocket；`up grok claude` 预热 child，`down grok` 只停一个 child（别名 `start` / `stop`） |
+| `up` / `down` | 起停那一个 WebSocket；`up grok` 预热 child，`down grok` 只停一个 child（别名 `start` / `stop`） |
 | `ping` / `run` | 握手 / 派活（`-p` 或 `-f`）。`run` 返回 `session_id`；续会话加 `--session-id` |
 | `pool up` / `pool down` / `pool ls` | 与 `up` / `down` / `ls` 的 pool 字段同义，留给脚本 |
 | `add` / `rm` | 登记、注销 URL |
+| `allow` | `acpw allow set grok cursor` 写入本机允许派发的 kind；`acpw allow` / `allow get` 查看；`allow add` / `allow rm` 增减。一次调用用 `ACPW_ALLOW=grok,cursor` |
 | `lang` | `acpw lang set zh-CN` 写入配置；`acpw lang` / `lang get` 查看。一次调用用 `--lang` |
 | `output` | 默认 markdown。`acpw output set json` 写入配置；一次调用用 `--json` 或 `--format` |
 | `install` / `uninstall` | bash 补全；`--purge` 再停 worker 并删 registry/state |
@@ -102,6 +102,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 
 - [ ] `acpw selfcheck` 的 `failed` 为空（装完自动跑过一次）
 - [ ] `acpw ls` 的 `## pool` 里 `live: true`，或 `run` 自己拉起过 socket
+- [ ] 只派了 `enabled` 且 `allowed` 的 worker
 - [ ] 续会话时用的是上次输出里的 `session_id`
 - [ ] `acpw run` 返回的 `stop_reason` 不是 `cancelled`
 - [ ] Host 自己看过 diff
@@ -112,6 +113,7 @@ acpw run grok -f /tmp/c.txt --session-id acpw-s<上次返回的 id>
 | 问题 | 做法 |
 | --- | --- |
 | 空跑 `grok agent stdio` / `grok agent serve` | 用 `acpw up grok` 或直接 `acpw run grok` |
+| `kind {kind} is not allowed` | 该 kind 不在本机允许列表；看 `acpw allow`，或 `acpw allow add KIND` |
 | 把 worker 回复当作修好了 | 自己跑测试 |
 | 密钥进聊天记录 | 只读 `acpw ls`；secret 在 `~/.local/state/acp-workers/` |
 | 一个 prompt 塞多件事 | 拆开，逐件派发逐件验收 |

@@ -34,7 +34,7 @@ GET /health
 
 ## 路由
 
-1. `session/new` 和 `session/load` **必须**带 `params._meta.worker`，值为 registry 里的 worker 名。缺失或未知 → 错误 `-32602`，message 为 `missing _meta.worker` / `unknown worker <name>`。
+1. `session/new` 和 `session/load` **必须**带 `params._meta.worker`，值为 registry 里的 worker 名。缺失或未知 → 错误 `-32602`，message 为 `missing _meta.worker` / `unknown worker <name>`。worker 在 registry 里 `enabled: false` → `-32602`，`worker <name> is disabled in registry`。kind 不在本机 allow 列表 → `-32602`，`kind <kind> is not allowed`。
 2. Daemon 按需 spawn 该 worker 的 child（与 `worker/up` 相同），转发请求，成功时铸造形如 `acpw-s<16 hex>` 的公开 `sessionId`，绑定到 `(worker, child, connection)`。Child 自己的 id 永不到达 host。这个 id 是随机的，不是序号：session 活过它的连接，知道这个 id 就是续对话的能力。
 3. 其他带 `params.sessionId` 的请求路由到该 session 的 child，必要时先续上（见 Session 耐久）。未知 session 或不可续 → 错误 `-32001`，message 为 `unknown session <id>`。Session 当前附着在另一条**未关闭**的连接上 → 错误 `-32001`，message 为 `session <id> is held by another client`。
 4. 既不是控制消息、也不绑定 session 的请求 → 错误 `-32602`，message 为 `no route: <method>`。
@@ -85,7 +85,7 @@ Session 是一段对话，不是一条 socket。它活过打开它的那条连�
 
 | Code | 何时 |
 | --- | --- |
-| `-32602` | 缺 `_meta.worker`、未知 worker、无法路由的 method |
+| `-32602` | 缺 `_meta.worker`、未知 worker、disabled、kind 不在 allow 列表、无法路由的 method |
 | `-32001` | 未知 session、被另一客户端占用、或 worker 不能续 |
 | `-32000` | 写给 child 失败，或请求做到一半 child 退了 |
 

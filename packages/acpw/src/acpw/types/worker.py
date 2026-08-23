@@ -9,6 +9,7 @@ class WorkerStatus(BaseModel):
     name: str
     kind: str
     enabled: bool
+    allowed: bool = True
     transport: TransportKind
     bind: str | None
     live: bool
@@ -26,6 +27,8 @@ class WorkerStatusList(BaseModel):
     listening_defaults: list[ListeningHit]
     processes: dict[str, list[int]]
     pool: PoolStatus | None = None
+    allow: list[str] | None = None
+    allow_source: str | None = None
 
 
 class WorkerStartResponse(BaseModel):

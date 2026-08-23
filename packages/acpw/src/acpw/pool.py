@@ -13,7 +13,7 @@ from acpw.client import MuxClient
 from acpw.i18n import t
 from acpw.paths import DEFAULT_POOL_BIND, POOL_STATE_NAME, worker_state_dir
 from acpw.probe import http_get
-from acpw.registry import AcpwError, ensure_secret, pid_alive, read_pid
+from acpw.registry import AcpwError, ensure_secret, pid_alive, read_pid, require_dispatchable
 from acpw.service import spawn_daemon
 from acpw.types import (
     ErrorResponse,
@@ -249,6 +249,9 @@ def pool_up(
     # Everything else asks _resolved_bind() where the pool is, so starting one anywhere
     # else just produces a daemon nobody can find.
     bind = bind or _resolved_bind()
+    if workers:
+        for name in workers:
+            require_dispatchable(name)
     secret = pool_secret()
     state = _state()
     log_path = state / "server.log"
@@ -374,6 +377,7 @@ def pool_ping(name: str) -> PingResponse:
     Handshaking with the pool proves nothing about the agent the caller asked for, so
     this spawns the child if needed and reports what that child said about itself.
     """
+    require_dispatchable(name)
     if not pool_live():
         raise AcpwError(ErrorResponse(error=t("pool not live"), name=name))
     client = _open_mux(pool_url())
@@ -392,6 +396,7 @@ def pool_ping(name: str) -> PingResponse:
 
 
 def pool_run(params: ExecParams) -> ExecResponse:
+    require_dispatchable(params.name)
     url = params.url or pool_url()
     client = _open_mux(url)
     try:
