@@ -6,7 +6,7 @@
 
 ## [未发布]
 
-## [0.7.0] - 2026-08-23
+## [0.6.6] - 2026-08-23
 
 ### 新增
 
@@ -136,8 +136,8 @@
 - `acp-workers` skill：派发流程、线路协议参考、安装参考、registry 示例。
 - `scripts/ensure-acpw.sh`：幂等 CLI 引导，带版本下限、`--update`、`--force`、`--completion`。
 
-[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/ticoAg/acp-workers/compare/v0.6.5...v0.7.0
+[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.6...HEAD
+[0.6.6]: https://github.com/ticoAg/acp-workers/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/ticoAg/acp-workers/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/ticoAg/acp-workers/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/ticoAg/acp-workers/compare/v0.6.2...v0.6.3

@@ -5,7 +5,7 @@ license: MIT
 compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
-  version: "0.7.0"
+  version: "0.6.6"
 ---
 
 # ACP Workers
