@@ -44,3 +44,7 @@ Claude / Codex / Cursor 没有 Grok 那种 `serve`。Grok 两种都有：`grok a
 默认 bind：grok `0.0.0.0:48191`，claude `48192`，codex `48193`，cursor `48194`，pool `48190`。监听地址是 `0.0.0.0`；客户端拨 `127.0.0.1`。
 
 Adapter 默认值（二进制、`stdio_argv`、默认 bind）在 `packages/acpw/src/acpw/adapters.py`。本机二进制不在默认位置时，在 registry 条目上覆盖 `stdio_argv`；条目形状见 [../assets/registry.example.json](../assets/registry.example.json)。
+
+## 标准 ACP stdio 面
+
+`acpw stdio NAME` 把 pool 暴露成一个普通 ACP agent 子进程（换行分隔的 JSON-RPC，stdout 只有帧）。适配层做三件事：在 `session/new` / `session/load` 上写入 `_meta.worker`；拦截 `worker/*`（`-32601`）；把 daemon 的 `initialize.agentInfo.name` 改成 `acpw/{NAME}`。JSON-RPC id 原样过线，child→host 的 `session/request_permission` 也会出现在 stdout。`--url` 绕开 pool。见 [pool.md](pool.md)。

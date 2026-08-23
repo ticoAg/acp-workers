@@ -114,6 +114,10 @@ ZH_CN: dict[str, str] = {
     "Resume this session instead of opening a new one.": ("续这个 session，而不是新开一个。"),
     "Connect to this websocket and skip the pool.": "连这个 websocket 并绕开 pool。",
     "Seconds to wait for the agent to finish the turn.": ("等待 agent 完成本回合的秒数。"),
+    "Speak ACP over stdin/stdout, bound to one pooled worker.": (
+        "在 stdin/stdout 上说 ACP，绑定到 pool 里的一个 worker。"
+    ),
+    "Registry worker this process is bound to.": "本进程绑定的 registry worker 名。",
     "Register bash completion for this user.": "为当前用户注册 bash 补全。",
     "Remove bash completion. Does not uninstall the uv tool or skill.": (
         "移除 bash 补全。不会卸载 uv tool 或 skill。"
@@ -193,6 +197,8 @@ ZH_CN: dict[str, str] = {
         "不支持的输出格式 {value}；可选 {supported}"
     ),
     "kind {kind} is not allowed": "kind {kind} 不在允许列表里",
+    "worker {name} has no stdio adapter": "worker {name} 没有 stdio 适配器",
+    "cannot connect: {error}": "无法连接: {error}",
     "unknown kind {kind}; choose {supported}": ("未知 kind {kind}；可选 {supported}"),
     # install
     "acpw not on PATH; run: uv tool install --editable <this-repo>": (
@@ -353,6 +359,10 @@ ZH_TW: dict[str, str] = {
     "Resume this session instead of opening a new one.": ("續這個 session，而不是新開一個。"),
     "Connect to this websocket and skip the pool.": "連這個 websocket 並繞過 pool。",
     "Seconds to wait for the agent to finish the turn.": ("等待 agent 完成本回合的秒數。"),
+    "Speak ACP over stdin/stdout, bound to one pooled worker.": (
+        "在 stdin/stdout 上說 ACP，綁定到 pool 裡的一個 worker。"
+    ),
+    "Registry worker this process is bound to.": "本行程綁定的 registry worker 名。",
     "Register bash completion for this user.": "為目前使用者註冊 bash 補全。",
     "Remove bash completion. Does not uninstall the uv tool or skill.": (
         "移除 bash 補全。不會解除安裝 uv tool 或 skill。"
@@ -431,6 +441,8 @@ ZH_TW: dict[str, str] = {
         "不支援的輸出格式 {value}；可選 {supported}"
     ),
     "kind {kind} is not allowed": "kind {kind} 不在允許列表裡",
+    "worker {name} has no stdio adapter": "worker {name} 沒有 stdio 轉接器",
+    "cannot connect: {error}": "無法連線: {error}",
     "unknown kind {kind}; choose {supported}": ("未知 kind {kind}；可選 {supported}"),
     "acpw not on PATH; run: uv tool install --editable <this-repo>": (
         "PATH 上找不到 acpw；執行: uv tool install --editable <this-repo>"

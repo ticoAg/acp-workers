@@ -56,6 +56,7 @@ GET /health
 | `acpw run NAME --session-id <id>` | 续上次返回的那段对话 |
 | `acpw run NAME --no-pool` | 强制走该 worker 自己的 gateway / serve |
 | `acpw ping NAME` | spawn/initialize 目标 child，回报它的 `agentInfo` / `protocolVersion`，不是 daemon 自己的身份 |
+| `acpw stdio NAME` | 标准 ACP stdio 客户端面：注入 `_meta.worker`，透传其余帧。daemon 不在就先起。`--url` 绕开 pool |
 | `acpw pool up` / `down` / `ls` | 与上面同义，留给脚本；`up` 可写 `--bind` |
 
 `acpw run NAME` / `acpw ping NAME` 默认：NAME 有 stdio 命令就走这条 socket，daemon 不在就先起；否则走原来的独立端口。`--url` 指名道姓某个 socket，绕开 pool。`acpw up` 起的是空 daemon，某个 worker 第一次 `session/new` 才 spawn 对应 child。
@@ -101,6 +102,8 @@ Host 眼里 daemon 就是 ACP agent。Child 的 `initialize` 在 spawn 时由 da
 Pool 发给你的 `sessionId` 是 daemon 自己的公开 id，不是 child 内部那个——child 之间的 id 会撞，daemon 负责两边翻译。
 
 `acpw run NAME` 把 NAME 填进 `_meta.worker`。换 agent 就再 `session/new` 一次。CLI 每次调用开一条新连接；把上次返回的 `--session-id` 再贴上去即可续。
+
+Zed、JetBrains、acp-devtools 不说 WebSocket、也不会填 `_meta.worker`。给它们的入口是 `acpw stdio NAME`：进程钉死一个 worker，在 stdin/stdout 上说标准 ACP，由适配层补上 `_meta.worker`。`worker/list` / `worker/up` / `worker/down` 在这一面回 `-32601`，避免编辑器碰到 pool 控制面。stdout 只出 ACP 帧。编辑器广告的 fs/terminal 到不了 child（spawn 时已按 `fs: false` 握手）。host 派活仍走 `acpw run`。
 
 ## 错误码
 

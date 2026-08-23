@@ -1,11 +1,11 @@
 ---
 name: acp-workers
-description: "通过一条常驻 WebSocket 把编码任务派给本机允许的 agent 进程（grok/claude/codex/cursor）。用 acpw allow 配置允许的 kind。用 --session-id 续会话。Host 规划、限定范围并验收；worker 只执行。USE FOR: acpw up/run/down, acpw allow, --session-id, 48190, 一个 WebSocket 多个 agent, 并发派发, grok agent stdio, ACP websocket, 常驻 ACP. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
+description: "通过一条常驻 WebSocket 把编码任务派给本机允许的 agent 进程（grok/claude/codex/cursor）。用 acpw allow 配置允许的 kind。用 --session-id 续会话。Host 规划、限定范围并验收；worker 只执行。USE FOR: acpw up/run/down, acpw stdio, acpw allow, --session-id, 48190, 一个 WebSocket 多个 agent, 并发派发, grok agent stdio, ACP websocket, 常驻 ACP, Zed ACP. DO NOT USE FOR: grok TUI consult/debate (grok-build-connector); MCP servers; grok -p; grok agent stdio in a tty; treating worker output as verified."
 license: MIT
 compatibility: "需要 Python 3.12+ 和 uv。CLI 名为 acpw。"
 metadata:
   author: ticoAg
-  version: "0.6.5"
+  version: "0.7.0"
 ---
 
 # ACP Workers
@@ -25,6 +25,7 @@ Host 只做规划、派发、验收。执行面是**一个**常驻 WebSocket（`
 - 只想和 grok 对话或多方辩论 → `grok-build-connector`
 - 配置 MCP server、跑 `grok -p`、在 tty 里手动 `grok agent stdio`
 - 把 worker 的自我报告当成验收结论
+- 当前 host 派活：仍用 `acpw run`，不要改走 `acpw stdio`（那是给 Zed / acp-devtools 的标准 ACP 面）
 
 ## 前置条件
 
@@ -91,6 +92,7 @@ NAME 必须是 `ls` 里 `allowed` 且 `enabled` 的 worker。第一次 `run` 返
 | `doctor` | 检查适配器二进制是否在 PATH |
 | `up` / `down` | 起停那一个 WebSocket；`up grok` 预热 child，`down grok` 只停一个 child（别名 `start` / `stop`） |
 | `ping` / `run` | 握手 / 派活（`-p` 或 `-f`）。`run` 返回 `session_id`；续会话加 `--session-id` |
+| `stdio` | 标准 ACP stdio 面，钉死一个 worker。给 Zed / acp-devtools / mock-editor；host 派活仍走 `run` |
 | `pool up` / `pool down` / `pool ls` | 与 `up` / `down` / `ls` 的 pool 字段同义，留给脚本 |
 | `add` / `rm` | 登记、注销 URL |
 | `allow` | `acpw allow set grok cursor` 写入本机允许派发的 kind；`acpw allow` / `allow get` 查看；`allow add` / `allow rm` 增减。一次调用用 `ACPW_ALLOW=grok,cursor` |

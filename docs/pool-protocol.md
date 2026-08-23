@@ -139,3 +139,5 @@ class MuxClient:
 - 用错误 `-32601`（`client fs not offered`）应答 `fs/*` 和 `terminal/*`，与今天的 `AcpClient` 一致。
 - 按 `sessionId` 收集 `session/update` notification。
 - 永远不要在 reader 线程上阻塞用户代码。
+
+标准 ACP 客户端（Zed、acp-devtools、`mock-editor`）不拨这条 WebSocket。它们拉起 `acpw stdio NAME`：适配层在 `session/new` / `session/load` 上填 `_meta.worker`，JSON-RPC id 原样过线，不代替 host 应答 permission。daemon 路由不变。

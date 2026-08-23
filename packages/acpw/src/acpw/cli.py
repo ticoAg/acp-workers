@@ -39,6 +39,7 @@ from acpw.pool import (
 from acpw.registry import AcpwError, load_registry, require_dispatchable
 from acpw.selfcheck import run_selfcheck
 from acpw.service import add, doctor, ping, rm, run, start, status, stop
+from acpw.stdio import run_stdio
 from acpw.types import (
     ErrorResponse,
     ExecParams,
@@ -353,6 +354,17 @@ def cmd_run(
         out.emit(pool_run(params) if via_pool else run(params))
     except Exception as exc:
         fail(exc)
+
+
+@app.command("stdio")
+def cmd_stdio(
+    name: Annotated[str, typer.Argument(help="Registry worker this process is bound to.")],
+    url: Annotated[
+        str | None, typer.Option(help="Connect to this websocket and skip the pool.")
+    ] = None,
+) -> None:
+    """Speak ACP over stdin/stdout, bound to one pooled worker."""
+    raise SystemExit(run_stdio(name, url=url))
 
 
 @app.command("install")

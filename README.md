@@ -89,7 +89,7 @@ acpw down         # 停 daemon
 
 ## 和 [acp-devtools](https://github.com/maksugr/acp-devtools) 合用
 
-两者不互相替代，也没有代码耦合。`acpw` 负责派发；[acp-devtools](https://github.com/maksugr/acp-devtools) 负责把 ACP 帧抓下来看。接缝是 daemon 拉 child 的那条 `stdio_argv`。
+两者不互相替代，也没有代码耦合。`acpw` 负责派发；[acp-devtools](https://github.com/maksugr/acp-devtools) 负责把 ACP 帧抓下来看。两条接缝：标准客户端走 `acpw stdio NAME`（host↔daemon）；排障时还可包 child 的 `stdio_argv`（daemon↔child）。
 
 | | 本项目 | acp-devtools |
 | --- | --- | --- |
@@ -101,21 +101,29 @@ acpw down         # 停 daemon
 
 ```mermaid
 flowchart LR
-    Host["Host / acpw"]
+    Client["Zed / acp-devtools"]
+    Stdio["acpw stdio grok"]
     Mux["Pool mux  :48190"]
-    Proxy["acp-devtools proxy"]
     Child["stdio child"]
-    UI["ui  :3737"]
-    DB[("captures.db")]
 
-    Host -->|"ACP WebSocket"| Mux
-    Mux -->|"stdio"| Proxy
-    Proxy -->|"stdio"| Child
-    Proxy --> DB
-    Proxy -.->|"inspector WS"| UI
+    Client -->|"ACP stdio"| Stdio
+    Stdio -->|"ACP WebSocket"| Mux
+    Mux -->|"stdio"| Child
 ```
 
-### 接法：包一层 proxy
+### 接法：`acpw stdio`（host 侧，推荐给编辑器）
+
+标准 ACP 客户端不拨 `48190`、也不填 `_meta.worker`。每个 worker 一个进程：
+
+```bash
+acpw up grok --cwd "$PWD"
+acp-devtools proxy --session-name grok -- acpw stdio grok
+# Zed agent_servers: { "command": "acpw", "args": ["stdio", "grok"] }
+```
+
+这一跳抓到的是公开 `session_id`（`acpw-s…`）和 daemon 的 `initialize`（`agentInfo.name` 为 `acpw/grok`）。host 派活仍用 `acpw run`。
+
+### 接法：包一层 child proxy
 
 `acpw add` 不写 `stdio_argv`。在 `~/.config/acp-workers/registry.json` 里覆盖，然后让 daemon 重新 spawn 该 child：
 
@@ -160,14 +168,14 @@ Proxy 夹在 **daemon ↔ child**，不是 host ↔ daemon。因此：
 
 | 目的 | 做法 |
 | --- | --- |
-| 同一 prompt 对比两个 agent | 两个 child 都包上，各 `acpw run` 一次，`acp-devtools diff <a> <b>` |
-| 分清是 pool 的问题还是 agent 的问题 | 绕开 pool，直接 `acp-devtools mock-editor --script golden.json -- grok agent --always-approve --no-leader stdio` |
+| 同一 prompt 对比两个 agent | 两个 `acpw stdio`（或两个包过的 child）各跑一次，`acp-devtools diff <a> <b>` |
+| 分清是 pool 的问题还是 agent 的问题 | 绕开 pool，直接 `acp-devtools mock-editor --script golden.json -- grok agent --always-approve --no-leader stdio`；打 pool 则 `-- acpw stdio grok` |
 | 测 mux、不烧 token | registry 里把某个 worker 的 `stdio_argv` 设成 `acp-devtools mock-agent --session N`（录音必须含 daemon 那次 `initialize`） |
 | 让 host 自己查抓包 | 给 host 配 `acp-devtools mcp`（stdio、只读）。这和 `acpw` 无关，skill 也不管 MCP |
 
-合不上的：Zed / JetBrains 经 acp-devtools 打到 pool（编辑器要 stdio，pool 是 WebSocket）；用 devtools 当 `48190` 的 ACP 客户端；指望抓包里出现 `acpw-s…`。Pool 本身的正确性继续靠 `acpw selfcheck` 和本仓库测试。
+合不上的：直接把 devtools 当 `48190` 的 ACP 客户端（它只吃 stdio）；用 `acpw stdio` 抓 `acpw run` 的帧（`run` 不走这条适配层）。编辑器广告的 fs/terminal 到不了 child。Pool 本身的正确性继续靠 `acpw selfcheck` 和本仓库测试。
 
-默认不要包 proxy。排障、对比 agent、怀疑线路不合 spec 时再包。
+默认不要包 child 的 `stdio_argv`。排障、对比 agent、怀疑线路不合 spec 时再包。编辑器 / inspector 用 `acpw stdio`。
 
 ## 安装
 
