@@ -9,3 +9,5 @@ dist/
 .coverage
 .python-version
 .references
+/AGENTS.md
+/CLAUDE.md
