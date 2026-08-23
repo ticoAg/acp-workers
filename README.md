@@ -1,24 +1,90 @@
 # acp-workers
 
-本机常驻的 [ACP](https://agentclientprotocol.com) worker，供 host agent 派发任务。
+本机一条 [ACP](https://agentclientprotocol.com) WebSocket，底下挂多个 agent 进程。Host 规划、派发、验收；worker 只执行。
 
-**Host** 负责规划和验收。**Worker**（Grok、Claude Code、Codex、Cursor）通过本机 WebSocket 执行。本仓库同时发布两份产物：教 agent 走这套流程的 skill，以及实现它的 `acpw` CLI。
+仓库同时发布两份产物：[acp-workers skill](skills/acp-workers/)（agent 指令）和 [`acpw` CLI](packages/acpw/)（实现）。可只装其中一份。
 
 [![skills.sh](https://skills.sh/b/ticoAg/acp-workers)](https://skills.sh/ticoAg/acp-workers)
 
-## 可用 Skill
+## 架构
 
-### acp-workers
+Host 只跟 `acpw` 说话。`acpw` 拨 `ws://127.0.0.1:48190`；daemon 翻译三套 id（host / child / session），按需 spawn stdio child。Host 看不到自己打到了哪个进程。
 
-把范围明确的编码任务派给常驻 ACP worker，验收由你自己做。
+```mermaid
+flowchart TB
+    Host["Host Agent"]
+    CLI["acpw"]
+    Host --> CLI
 
-**适用：**
+    subgraph Pool["Pool Daemon  port 48190"]
+        Mux["ACP mux"]
+        subgraph Children["stdio children"]
+            Grok["grok"]
+            Claude["claude"]
+            Codex["codex"]
+            Cursor["cursor"]
+        end
+        Mux --> Grok
+        Mux --> Claude
+        Mux --> Codex
+        Mux --> Cursor
+    end
 
-- 把一件可独立完成的编码任务交给 grok / claude / codex / cursor
-- 起一条 WebSocket，底下挂多个 agent 进程（`acpw up`）
-- 用上次 `acpw run` 返回的 `session_id` 续对话
+    CLI -->|"ACP WebSocket"| Mux
+```
 
-**不适用：** grok TUI 咨询或辩论、MCP server 配置、`grok -p`，或把 worker 的自我报告当成验收。
+`acpw up` 起这条 socket；`acpw up grok claude` 顺带预热 child；`acpw run` / `acpw ping` 在 daemon 还没起时会自己起一份。`--no-pool` 是每个 worker 自己的 gateway / `grok agent serve` 逃生口。线路契约见 [`docs/pool-protocol.md`](docs/pool-protocol.md)。
+
+公开 `session_id`（`acpw-s` + 16 hex）活过连接、child 和 daemon 重启。续会话带 `--session-id`。三档耐久见 [pool.md](skills/acp-workers/references/pool.md)。
+
+## 支持的 Agent
+
+Registry 名默认等于 kind。同 kind 再开一个进程：`acpw add grok-b --kind grok`。
+
+| 名字 | 框架 | 二进制 | Pool 子进程 | `--no-pool` |
+| --- | --- | --- | --- | --- |
+| `grok` | [Grok Build](https://x.ai/build) | `grok` | `grok agent --always-approve --no-leader stdio` | `serve` 48191 |
+| `claude` | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `npx` | [`@agentclientprotocol/claude-agent-acp`](https://www.npmjs.com/package/@agentclientprotocol/claude-agent-acp) | `48192` |
+| `codex` | [Codex CLI](https://github.com/openai/codex) | `npx` | [`@agentclientprotocol/codex-acp`](https://www.npmjs.com/package/@agentclientprotocol/codex-acp) | `48193` |
+| `cursor` | [Cursor CLI](https://cursor.com/docs/cli/acp) | `cursor-agent` | `cursor-agent acp` | `48194` |
+
+`mock` 是包内 echo agent，给测试用，`acpw ls` 默认不列出。至少一个二进制在 `PATH` 上即可；`acpw doctor` 查缺哪一个。
+
+## 工作流
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Host
+    participant CLI as acpw
+    participant Daemon as Pool Daemon
+    participant Child as Worker child
+
+    Host->>CLI: acpw run grok -f task.txt
+    CLI->>Daemon: initialize
+    CLI->>Daemon: session/new _meta.worker=grok
+    Daemon->>Child: spawn + initialize
+    Daemon->>Child: session/new
+    Daemon-->>CLI: sessionId acpw-s
+    CLI->>Daemon: session/prompt
+    Daemon->>Child: session/prompt
+    Child-->>Daemon: chunks / tool_calls
+    Daemon-->>CLI: remap session id
+    CLI-->>Host: text + session_id
+    Note over Host: ok 只表示回合结束. Host 自己看 diff 和测试.
+```
+
+```bash
+acpw doctor && acpw ls
+acpw up grok --cwd "$PWD"
+acpw run grok -f /tmp/task.txt
+acpw run claude -f /tmp/other.txt &
+acpw run grok -f /tmp/next.txt --session-id acpw-s…
+acpw down grok    # 只停一个 child
+acpw down         # 停 daemon
+```
+
+默认绑 `0.0.0.0:48190`，客户端拨回环。Child 是 always-approve，`server-key` 明文过线——别把端口放到不可信网络。`acpw selfcheck` 会报 `exposure` 告警。
 
 ## 安装
 
@@ -27,18 +93,17 @@ npx skills add ticoAg/acp-workers --skill acp-workers
 bash <installed-skill-dir>/scripts/ensure-acpw.sh --completion
 ```
 
-Skill 自带幂等引导脚本：用 uv 安装 `acpw` CLI，并注册 bash 补全。想手动装：
+或只装 CLI：
 
 ```bash
 uv tool install "git+https://github.com/ticoAg/acp-workers#subdirectory=packages/acpw"
 acpw install
 ```
 
-Registry / state 路径以及卸载顺序见 [`skills/acp-workers/references/install.md`](skills/acp-workers/references/install.md)。
+引导脚本幂等，带版本闸门。路径、卸载顺序见 [install.md](skills/acp-workers/references/install.md)。更新：`npx skills update acp-workers`，再 `ensure-acpw.sh --update`。版本线见 [CHANGELOG.md](CHANGELOG.md)。
 
-### 让 agent 代装
-
-把下面这段贴给任何有 shell 的编码 agent：
+<details>
+<summary>让 agent 代装</summary>
 
 ```
 把 acp-workers skill 和它的 CLI 装好，然后核验：
@@ -53,59 +118,15 @@ Registry / state 路径以及卸载顺序见 [`skills/acp-workers/references/ins
 把两行 JSON 原样贴回来。没有它们不要声称成功。
 ```
 
-## 更新
+</details>
 
-```bash
-npx skills update acp-workers
-bash <installed-skill-dir>/scripts/ensure-acpw.sh --update
-```
+## 仓库
 
-引导脚本也会自愈：把 `acpw version` 和 skill 需要的下限比较，CLI 落后就自行升级。Skill 和 CLI 共用一个版本号，见 [CHANGELOG.md](CHANGELOG.md)。
-
-## 用法
-
-```
-起共享 WebSocket，把 /tmp/task.txt 里失败的测试交给 grok
-```
-
-```bash
-acpw ls && acpw up grok --cwd "$PWD" && acpw run grok -f /tmp/task.txt
-```
-
-一条 WebSocket，多个 agent。`acpw up` 在 `48190` 起一个 daemon，底下挂 children。`acpw run` 返回 `session_id`；下次带 `--session-id` 就能续同一段对话。`acpw run` / `acpw ping` 在 daemon 还没起时会自己起一份。
-
-```bash
-acpw up
-acpw run grok -f /tmp/a.txt
-acpw run claude -f /tmp/b.txt &
-acpw run grok -f /tmp/c.txt --session-id acpw-s…
-acpw down grok
-acpw down
-```
-
-`--no-pool` 走每个 worker 自己的 gateway 或 `grok agent serve`。细节见 [`skills/acp-workers/references/pool.md`](skills/acp-workers/references/pool.md)。
-
-Worker 默认绑 `0.0.0.0`，客户端拨回环。它们跑 always-approve，`server-key` 明文过线，所以别把这些端口放到不可信网络——`acpw selfcheck` 正是为此告警。
-
-## 仓库结构
-
-```
-skills/
-  acp-workers/
-    SKILL.md          # agent 指令
-    AGENTS.md         # 跨 agent 入口
-    README.md         # 给人看的 skill 说明
-    metadata.json     # version、abstract、references
-    scripts/          # ensure-acpw.sh，CLI 引导脚本
-    references/       # 安装、线路协议、pool
-    assets/           # registry 示例
-packages/
-  acpw/               # CLI：pyproject、src/acpw、tests
-docs/
-  pool-protocol.md    # daemon 线路契约，给改 daemon 的人看
-skills.sh.json        # skills.sh 分组清单
-CHANGELOG.md          # 两份产物共用一条版本线
-```
+| 路径 | 作用 |
+| --- | --- |
+| [`skills/acp-workers/`](skills/acp-workers/) | Skill 载荷：`SKILL.md`、scripts、references |
+| [`packages/acpw/`](packages/acpw/) | `acpw` CLI |
+| [`docs/pool-protocol.md`](docs/pool-protocol.md) | Daemon 线路契约 |
 
 ## 开发
 
@@ -113,12 +134,11 @@ CHANGELOG.md          # 两份产物共用一条版本线
 cd packages/acpw
 uv sync
 uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv tool install --editable .   # 把可热更新的 acpw 放到 PATH
+uv run ruff check . && uv run ruff format --check .
+uv tool install --editable .
 ```
 
-测试从不碰真实 agent 二进制；它们驱动隐藏的 `mock` adapter，也就是包内的 echo agent。
+测试驱动隐藏的 `mock` adapter，不碰真实 agent 二进制，也不碰真实 registry（`ACPW_CONFIG_DIR` / `ACPW_STATE_DIR` + `free_port()`）。
 
 ## 许可证
 
