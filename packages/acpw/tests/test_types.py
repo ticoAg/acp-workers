@@ -1,5 +1,13 @@
 from acpw.install import MARKER, strip_bashrc_marker
-from acpw.types import Adapter, ExecResponse, Registry, Worker, WorkerStatusList
+from acpw.types import (
+    Adapter,
+    ExecResponse,
+    Registry,
+    SessionInfo,
+    SessionListResponse,
+    Worker,
+    WorkerStatusList,
+)
 
 
 def test_registry_roundtrip() -> None:
@@ -14,6 +22,23 @@ def test_exec_response_json() -> None:
     )
     parsed = ExecResponse.model_validate_json(payload.model_dump_json())
     assert parsed.text == "pong"
+
+
+def test_session_list_response_json() -> None:
+    payload = SessionListResponse(
+        sessions=[
+            SessionInfo(
+                session_id="acpw-s0123456789abcdef",
+                worker="grok",
+                cwd="/tmp",
+                live=True,
+                held=False,
+            )
+        ]
+    )
+    parsed = SessionListResponse.model_validate_json(payload.model_dump_json())
+    assert parsed.sessions[0].session_id.startswith("acpw-s")
+    assert parsed.sessions[0].held is False
 
 
 def test_adapter_defaults() -> None:

@@ -58,6 +58,9 @@ GET /health
 | `acpw ping NAME` | spawn/initialize 目标 child，回报它的 `agentInfo` / `protocolVersion`，不是 daemon 自己的身份 |
 | `acpw stdio NAME` | 标准 ACP stdio 客户端面：注入 `_meta.worker`，透传其余帧。daemon 不在就先起。`--url` 绕开 pool |
 | `acpw pool up` / `down` / `ls` | 与上面同义，留给脚本；`up` 可写 `--bind` |
+| `acpw sessions` / `sessions list` | 列出公开 session：id / worker / cwd / live / held |
+| `acpw sessions rm ID` | 删除一条（占用中的拒绝）；幂等 |
+| `acpw sessions prune` | 删除所有 `held: false` 的耐久记录；占用中的留下 |
 
 `acpw run NAME` / `acpw ping NAME` 默认：NAME 有 stdio 命令就走这条 socket，daemon 不在就先起；否则走原来的独立端口。`--url` 指名道姓某个 socket，绕开 pool。`acpw up` 起的是空 daemon，某个 worker 第一次 `session/new` 才 spawn 对应 child。
 
@@ -87,7 +90,7 @@ acpw down
 
 同一时刻一个 session 只给一条连接。另一条活连接正占着时，续会返回 `session <id> is held by another client`。那条连接断开后 session 卸下，可以再续。
 
-Session 只增不减：`sessions.json` 里的记录故意活过 child 和 daemon（L2、L3 正靠它），daemon 里没有回收、过期或数量上限。批量派任务时每个不带 `--session-id` 的 `acpw run` 都会新开一段对话，长期跑要么复用 id，要么 `acpw down` 后删掉 `_pool/sessions.json`。
+没有自动 TTL。`sessions.json` 里的记录活过 child 和 daemon（L2、L3 正靠它），直到显式删除：`acpw sessions` 查看，`acpw sessions rm ID` 删一条，`acpw sessions prune` 清掉所有未被占用的。占用中的 session 不能删。批量派任务时每个不带 `--session-id` 的 `acpw run` 都会新开一段对话；长期跑请复用 id 或 prune。
 
 ## 路由
 
@@ -96,6 +99,8 @@ Host 眼里 daemon 就是 ACP agent。Child 的 `initialize` 在 spawn 时由 da
 | 请求 | 怎么走 |
 | --- | --- |
 | `session/new` | `params._meta.worker` 必须是 registry 里的 `name`，用来选定 agent |
+| `session/list` | daemon 自己应答。不必带 `_meta.worker`；带了则只列该 worker（`acpw stdio NAME` 会注入） |
+| `session/delete` | daemon 自己应答。占用中拒绝；不杀 child |
 | 之后所有带 `params.sessionId` 的请求 | 跟到该 session 绑定的 child；必要时走 L2/L3 续上 |
 | 连接断开 | 占用解除，session 仍在（L1）；child 仍常驻 |
 

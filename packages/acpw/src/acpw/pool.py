@@ -24,6 +24,10 @@ from acpw.types import (
     PoolStatus,
     PoolStopResponse,
     PoolWorker,
+    SessionDeleteResponse,
+    SessionInfo,
+    SessionListResponse,
+    SessionPruneResponse,
     ToolCallOut,
     WorkerStopResponse,
 )
@@ -391,6 +395,82 @@ def pool_ping(name: str) -> PingResponse:
             agent_version=worker.get("agentVersion"),
             agent_info=worker.get("agentInfo"),
         )
+    finally:
+        client.close()
+
+
+def _require_live() -> None:
+    if not pool_live():
+        raise AcpwError(ErrorResponse(error=t("pool not live")))
+
+
+def _session_info_rows(payload: dict[str, Any]) -> list[SessionInfo]:
+    rows: list[SessionInfo] = []
+    for item in payload.get("sessions") or []:
+        if not isinstance(item, dict):
+            continue
+        sid = item.get("sessionId")
+        if not isinstance(sid, str) or not sid:
+            continue
+        meta = item.get("_meta")
+        meta = meta if isinstance(meta, dict) else {}
+        cwd = item.get("cwd")
+        rows.append(
+            SessionInfo(
+                session_id=sid,
+                worker=str(meta.get("worker") or ""),
+                cwd=cwd if isinstance(cwd, str) else "",
+                live=bool(meta.get("live")),
+                held=bool(meta.get("held")),
+            )
+        )
+    return rows
+
+
+def pool_sessions() -> SessionListResponse:
+    _require_live()
+    client = _open_mux(pool_url())
+    try:
+        client.rpc("initialize", _init_params(), timeout=20)
+        payload = client.rpc("session/list", {}, timeout=30)
+        return SessionListResponse(sessions=_session_info_rows(payload))
+    finally:
+        client.close()
+
+
+def pool_session_delete(session_id: str) -> SessionDeleteResponse:
+    _require_live()
+    client = _open_mux(pool_url())
+    try:
+        client.rpc("initialize", _init_params(), timeout=20)
+        try:
+            client.rpc("session/delete", {"sessionId": session_id}, timeout=30)
+        except RuntimeError as exc:
+            raise _resume_error("", session_id, exc) from exc
+        return SessionDeleteResponse(session_id=session_id)
+    finally:
+        client.close()
+
+
+def pool_sessions_prune() -> SessionPruneResponse:
+    """Delete every session whose `_meta.held` is false. Held sessions stay."""
+    _require_live()
+    client = _open_mux(pool_url())
+    try:
+        client.rpc("initialize", _init_params(), timeout=20)
+        payload = client.rpc("session/list", {}, timeout=30)
+        deleted = 0
+        kept = 0
+        for row in _session_info_rows(payload):
+            if row.held:
+                kept += 1
+                continue
+            try:
+                client.rpc("session/delete", {"sessionId": row.session_id}, timeout=30)
+            except RuntimeError as exc:
+                raise _resume_error("", row.session_id, exc) from exc
+            deleted += 1
+        return SessionPruneResponse(deleted=deleted, kept=kept)
     finally:
         client.close()
 

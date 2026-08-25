@@ -147,6 +147,11 @@ ZH_CN: dict[str, str] = {
     "Pre-warm these workers.": "预热这些 worker。",
     "Stop the pool daemon and every child it owns.": ("停止 pool daemon 及其名下每个 child。"),
     "Pool liveness, children, and session counts.": "pool 探活、child 和 session 计数。",
+    "List or delete pool sessions.": "列出或删除 pool session。",
+    "List pool sessions.": "列出 pool session。",
+    "Delete a pool session.": "删除一个 pool session。",
+    "Public session id to delete.": "要删除的公开 session id。",
+    "Delete every pool session that is not held.": "删除所有未被占用的 pool session。",
     "Internal multiplexing daemon. Started by `acpw up`.": ("内部多路 daemon。由 `acpw up` 启动。"),
     "Internal stdio-to-websocket bridge. Started by `acpw up --no-pool`.": (
         "内部 stdio 到 websocket 桥。由 `acpw up --no-pool` 启动。"
@@ -392,6 +397,11 @@ ZH_TW: dict[str, str] = {
     "Pre-warm these workers.": "預熱這些 worker。",
     "Stop the pool daemon and every child it owns.": ("停止 pool daemon 及其名下每個 child。"),
     "Pool liveness, children, and session counts.": "pool 探活、child 與 session 計數。",
+    "List or delete pool sessions.": "列出或刪除 pool session。",
+    "List pool sessions.": "列出 pool session。",
+    "Delete a pool session.": "刪除一個 pool session。",
+    "Public session id to delete.": "要刪除的公開 session id。",
+    "Delete every pool session that is not held.": "刪除所有未被佔用的 pool session。",
     "Internal multiplexing daemon. Started by `acpw up`.": ("內部多路 daemon。由 `acpw up` 啟動。"),
     "Internal stdio-to-websocket bridge. Started by `acpw up --no-pool`.": (
         "內部 stdio 到 websocket 橋。由 `acpw up --no-pool` 啟動。"

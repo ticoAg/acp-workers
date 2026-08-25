@@ -138,6 +138,9 @@ def initialize(agent: StdioAgent) -> dict[str, Any]:
     result = reply["result"]
     assert result["protocolVersion"] == 1
     assert result["agentCapabilities"]["loadSession"] is True
+    caps = result["agentCapabilities"]["sessionCapabilities"]
+    assert caps["list"] == {}
+    assert caps["delete"] == {}
     return result
 
 
@@ -191,6 +194,69 @@ def test_mux_still_requires_meta_worker(tmp_path: Path, monkeypatch) -> None:
             )
     finally:
         client.close()
+        runner.invoke(app, ["pool", "down"])
+
+
+def test_stdio_list_and_delete_are_not_worker_methods(tmp_path: Path, monkeypatch) -> None:
+    isolate(tmp_path, monkeypatch)
+    register("alpha")
+    agent = StdioAgent("alpha")
+    try:
+        initialize(agent)
+        empty, _ = agent.rpc("session/list", {})
+        assert "error" not in empty, empty
+        assert empty["result"]["sessions"] == []
+        created, _ = agent.rpc("session/new", {"cwd": str(tmp_path), "mcpServers": []})
+        sid = created["result"]["sessionId"]
+        listed, _ = agent.rpc("session/list", {})
+        assert "error" not in listed, listed
+        rows = listed["result"]["sessions"]
+        assert len(rows) == 1
+        assert rows[0]["sessionId"] == sid
+        assert rows[0]["_meta"]["worker"] == "alpha"
+        deleted, _ = agent.rpc("session/delete", {"sessionId": sid})
+        assert "error" not in deleted, deleted
+        assert deleted.get("result") == {}
+        after, _ = agent.rpc("session/list", {})
+        assert after["result"]["sessions"] == []
+    finally:
+        agent.close()
+        runner.invoke(app, ["pool", "down"])
+
+
+def test_stdio_list_filters_to_its_worker(tmp_path: Path, monkeypatch) -> None:
+    isolate(tmp_path, monkeypatch)
+    register("alpha")
+    register("beta")
+    up = runner.invoke(app, ["pool", "up"])
+    assert up.exit_code == 0, up.output
+    left = StdioAgent("alpha")
+    right = StdioAgent("beta")
+    mux = _open_mux(pool_url())
+    try:
+        initialize(left)
+        initialize(right)
+        mux.rpc("initialize", _init_params(), timeout=20)
+        a, _ = left.rpc("session/new", {"cwd": str(tmp_path), "mcpServers": []})
+        b, _ = right.rpc("session/new", {"cwd": str(tmp_path), "mcpServers": []})
+        assert "error" not in a, a
+        assert "error" not in b, b
+        sid_a, sid_b = a["result"]["sessionId"], b["result"]["sessionId"]
+        both = mux.rpc("session/list", {}, timeout=20)
+        mux_ids = {row["sessionId"] for row in both["sessions"]}
+        assert mux_ids == {sid_a, sid_b}
+        only_a, _ = left.rpc("session/list", {})
+        assert "error" not in only_a, only_a
+        alpha_ids = {row["sessionId"] for row in only_a["result"]["sessions"]}
+        assert alpha_ids == {sid_a}
+        stolen, _ = left.rpc("session/delete", {"sessionId": sid_b})
+        assert "error" not in stolen, stolen
+        still = mux.rpc("session/list", {}, timeout=20)
+        assert {row["sessionId"] for row in still["sessions"]} == {sid_a, sid_b}
+    finally:
+        left.close()
+        right.close()
+        mux.close()
         runner.invoke(app, ["pool", "down"])
 
 

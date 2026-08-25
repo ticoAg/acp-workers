@@ -32,6 +32,9 @@ from acpw.pool import (
     pool_live,
     pool_ping,
     pool_run,
+    pool_session_delete,
+    pool_sessions,
+    pool_sessions_prune,
     pool_status,
     pool_stop_worker,
     pool_up,
@@ -572,6 +575,59 @@ def cmd_allow_rm(
     """Remove kinds from the allow list."""
     try:
         out.emit(allow_policy.remove_kinds(kinds))
+    except Exception as exc:
+        fail(exc)
+
+
+def emit_sessions() -> None:
+    out.emit(pool_sessions())
+
+
+sessions_app = typer.Typer(
+    name="sessions",
+    help="List or delete pool sessions.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+    pretty_exceptions_enable=False,
+)
+app.add_typer(sessions_app)
+
+
+@sessions_app.callback(invoke_without_command=True)
+def sessions_root(ctx: typer.Context) -> None:
+    """List or delete pool sessions."""
+    if ctx.invoked_subcommand is None:
+        try:
+            emit_sessions()
+        except Exception as exc:
+            fail(exc)
+
+
+@sessions_app.command("list")
+def cmd_sessions_list() -> None:
+    """List pool sessions."""
+    try:
+        emit_sessions()
+    except Exception as exc:
+        fail(exc)
+
+
+@sessions_app.command("rm")
+def cmd_sessions_rm(
+    session_id: Annotated[str, typer.Argument(help="Public session id to delete.")],
+) -> None:
+    """Delete a pool session."""
+    try:
+        out.emit(pool_session_delete(session_id))
+    except Exception as exc:
+        fail(exc)
+
+
+@sessions_app.command("prune")
+def cmd_sessions_prune() -> None:
+    """Delete every pool session that is not held."""
+    try:
+        out.emit(pool_sessions_prune())
     except Exception as exc:
         fail(exc)
 

@@ -18,6 +18,8 @@ from acpw.types import (
     PoolStatus,
     PoolWorker,
     SelfCheckResponse,
+    SessionInfo,
+    SessionListResponse,
     ToolCallOut,
     VersionResponse,
     WorkerStatus,
@@ -33,6 +35,26 @@ def _markdown() -> None:
 
 def _json() -> None:
     apply(OutputState(format="json", source="flag", saved=None))
+
+
+def test_render_sessions_is_a_table() -> None:
+    _markdown()
+    body = render(
+        SessionListResponse(
+            sessions=[
+                SessionInfo(
+                    session_id="acpw-s0123456789abcdef",
+                    worker="grok",
+                    cwd="/tmp/work",
+                    live=True,
+                    held=False,
+                )
+            ]
+        )
+    )
+    assert body.startswith("ok\n")
+    assert "| session_id | worker | cwd | live | held |" in body
+    assert "| acpw-s0123456789abcdef | grok | `/tmp/work` | true | false |" in body
 
 
 def test_render_doctor_is_a_table() -> None:

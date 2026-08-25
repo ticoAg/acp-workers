@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Bump when the skill starts relying on a newer CLI. Below this, the script upgrades.
-required_version="0.6.6"
+required_version="0.6.7"
 
 force=0
 update=0

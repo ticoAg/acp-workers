@@ -2,9 +2,19 @@
 
 版本号同时覆盖本仓库两份产物：`acp-workers` skill 和 `acpw` CLI。它们一起发布，所以 `packages/acpw/pyproject.toml`、`skills/acp-workers/metadata.json`，以及 `skills/acp-workers/SKILL.md` 里的 `metadata.version` 始终是同一个数字。
 
-格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号是 `X.Y.Z`。未明确要求升大版本之前，发版只加 PATCH（`Z`）。
 
 ## [未发布]
+
+## [0.6.7] - 2026-08-25
+
+### 新增
+
+- `session/list` 与 `session/delete`：daemon 自己应答官方 ACP 形状。`initialize` 广告 `sessionCapabilities.list` / `delete`。`acpw sessions` / `sessions list` 列表，`acpw sessions rm ID` 删除，`acpw sessions prune` 清掉未被占用的耐久记录。stdio 在 `session/list` 与 `session/delete` 上注入 `_meta.worker`。
+
+### 文档
+
+- `ROADMAP.md`、`docs/research-plan.md`；`docs/pool-protocol.md` 以 daemon 代码为 SSOT。
 
 ## [0.6.6] - 2026-08-23
 
@@ -136,7 +146,8 @@
 - `acp-workers` skill：派发流程、线路协议参考、安装参考、registry 示例。
 - `scripts/ensure-acpw.sh`：幂等 CLI 引导，带版本下限、`--update`、`--force`、`--completion`。
 
-[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.6...HEAD
+[未发布]: https://github.com/ticoAg/acp-workers/compare/v0.6.7...HEAD
+[0.6.7]: https://github.com/ticoAg/acp-workers/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/ticoAg/acp-workers/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/ticoAg/acp-workers/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/ticoAg/acp-workers/compare/v0.6.3...v0.6.4

@@ -85,6 +85,7 @@ def initialize_result() -> dict[str, Any]:
         "protocolVersion": 1,
         "agentCapabilities": {
             "loadSession": True,
+            "sessionCapabilities": {"list": {}, "delete": {}},
             "promptCapabilities": {"image": False, "audio": False, "embeddedContext": True},
         },
         "authMethods": [],
@@ -152,6 +153,26 @@ def _child_supports_load(child: PooledChild) -> bool:
     init = child.init_result or {}
     caps = init.get("agentCapabilities")
     return isinstance(caps, dict) and bool(caps.get("loadSession"))
+
+
+def _child_supports_delete(child: PooledChild) -> bool:
+    """Official ACP: advertised iff `sessionCapabilities.delete` is an object, not null."""
+    init = child.init_result or {}
+    caps = init.get("agentCapabilities")
+    if not isinstance(caps, dict):
+        return False
+    session_caps = caps.get("sessionCapabilities")
+    return isinstance(session_caps, dict) and isinstance(session_caps.get("delete"), dict)
+
+
+def _meta_worker(params: Any) -> str | None:
+    if not isinstance(params, dict):
+        return None
+    meta = params.get("_meta")
+    if not isinstance(meta, dict):
+        return None
+    worker = meta.get("worker")
+    return worker if isinstance(worker, str) and worker else None
 
 
 class PooledChild:
@@ -792,6 +813,90 @@ class Pool:
                 raise
             return self.resume_session(conn, session_id)
 
+    def list_sessions(self, worker: str | None) -> list[dict[str, Any]]:
+        """Public ids only: durable ∪ in-memory. Never includes child native ids."""
+        with self.lock:
+            ids = set(self.durable) | set(self.sessions)
+            rows: list[dict[str, Any]] = []
+            for sid in sorted(ids):
+                session = self.sessions.get(sid)
+                durable = self.durable.get(sid)
+                if session is not None:
+                    rec_worker = session.worker
+                    live = session.child.alive()
+                    held = session.conn is not None and session.conn.open
+                elif durable is not None:
+                    rec_worker = str(durable["worker"])
+                    live = False
+                    held = False
+                else:
+                    continue
+                if worker is not None and rec_worker != worker:
+                    continue
+                cwd_raw = durable.get("cwd") if durable is not None else None
+                if not isinstance(cwd_raw, str) and session is not None:
+                    cwd_raw = session.cwd
+                rows.append(
+                    {
+                        "sessionId": sid,
+                        "cwd": cwd_raw if isinstance(cwd_raw, str) else "",
+                        "_meta": {"worker": rec_worker, "live": live, "held": held},
+                    }
+                )
+            return rows
+
+    def delete_session(self, conn: Conn, session_id: str, worker: str | None) -> None:
+        """Drop mux mapping. Unknown is success. Held-by-another is not. Child stays up."""
+        with self.lock:
+            if session_id not in self.durable and session_id not in self.sessions:
+                return
+            lock = self.resume_locks.setdefault(session_id, threading.Lock())
+        with lock:
+            child: PooledChild | None = None
+            native: str | None = None
+            with self.lock:
+                session = self.sessions.get(session_id)
+                durable = self.durable.get(session_id)
+                if session is None and durable is None:
+                    return
+                if session is not None:
+                    rec_worker = session.worker
+                else:
+                    rec_worker = str(durable["worker"])
+                if worker is not None and rec_worker != worker:
+                    return
+                if session is not None:
+                    holder = session.conn
+                    if holder is not None and holder.open and holder is not conn:
+                        raise RouteError(
+                            ERR_SESSION, f"session {session_id} is held by another client"
+                        )
+                    child = session.child
+                    native = session.native
+                    self.sessions.pop(session_id, None)
+                    self.public_ids.pop((session.child.token, session.native), None)
+                self.durable.pop(session_id, None)
+            self._persist_durable()
+            log(f"session {session_id}: deleted")
+            if (
+                child is not None
+                and native is not None
+                and child.alive()
+                and _child_supports_delete(child)
+            ):
+
+                def ignore(obj: dict[str, Any]) -> None:
+                    if "error" in obj:
+                        log(
+                            f"{child.name}: session/delete native={native} ignored: "
+                            f"{dumps(obj.get('error'))}"
+                        )
+
+                try:
+                    child.request("session/delete", {"sessionId": native}, ignore)
+                except RouteError:
+                    pass
+
     def serve_request(self, conn: Conn, msg: dict[str, Any]) -> None:
         msg_id = msg.get("id")
         method = msg.get("method") or ""
@@ -846,7 +951,23 @@ class Pool:
                 raise RouteError(ERR_ROUTE, "missing name")
             conn.send(_result(msg_id, {"name": name, "stopped": self.stop_child(name)}))
             return
+        if method == "session/list":
+            conn.send(_result(msg_id, {"sessions": self.list_sessions(_meta_worker(params))}))
+            return
+        if method == "session/delete":
+            session_id = params.get("sessionId") if isinstance(params, dict) else None
+            if isinstance(session_id, str) and session_id:
+                self.delete_session(conn, session_id, _meta_worker(params))
+            conn.send(_result(msg_id, {}))
+            return
         if method in {"session/new", "session/load"}:
+            if method == "session/load":
+                load_id = params.get("sessionId") if isinstance(params, dict) else None
+                if isinstance(load_id, str) and load_id:
+                    with self.lock:
+                        known = load_id in self.sessions or load_id in self.durable
+                    if not known:
+                        raise RouteError(ERR_SESSION, f"unknown session {load_id}")
             self.open_session(conn, msg_id, method, params)
             return
         session_id = params.get("sessionId") if isinstance(params, dict) else None

@@ -36,3 +36,27 @@ class PingResponse(BaseModel):
     agent_version: str | None = None
     agent_info: dict[str, Any] | None = None
     error: str | None = None
+
+
+class SessionInfo(BaseModel):
+    session_id: str
+    worker: str
+    cwd: str = ""
+    live: bool = False
+    held: bool = False
+
+
+class SessionListResponse(BaseModel):
+    ok: bool = True
+    sessions: list[SessionInfo] = Field(default_factory=list)
+
+
+class SessionDeleteResponse(BaseModel):
+    ok: bool = True
+    session_id: str
+
+
+class SessionPruneResponse(BaseModel):
+    ok: bool = True
+    deleted: int = 0
+    kept: int = 0

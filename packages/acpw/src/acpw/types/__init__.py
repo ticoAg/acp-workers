@@ -15,7 +15,16 @@ from acpw.types.registry import (
     WorkerRegistered,
 )
 from acpw.types.selfcheck import CheckItem, CheckLevel, SelfCheckResponse
-from acpw.types.session import ExecParams, ExecResponse, PingResponse, ToolCallOut
+from acpw.types.session import (
+    ExecParams,
+    ExecResponse,
+    PingResponse,
+    SessionDeleteResponse,
+    SessionInfo,
+    SessionListResponse,
+    SessionPruneResponse,
+    ToolCallOut,
+)
 from acpw.types.shared import ProbeVia, TransportKind
 from acpw.types.version import VersionResponse
 from acpw.types.worker import (
@@ -48,6 +57,10 @@ __all__ = [
     "ProbeVia",
     "Registry",
     "SelfCheckResponse",
+    "SessionDeleteResponse",
+    "SessionInfo",
+    "SessionListResponse",
+    "SessionPruneResponse",
     "ToolCallOut",
     "TransportKind",
     "UninstallResponse",

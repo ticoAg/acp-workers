@@ -19,7 +19,7 @@ from acpw.registry import AcpwError, load_registry, require_dispatchable
 from acpw.ws import ws_close, ws_connect, ws_recv, ws_send
 
 WORKER_METHODS = frozenset({"worker/list", "worker/up", "worker/down"})
-SESSION_OPEN = frozenset({"session/new", "session/load"})
+SESSION_META = frozenset({"session/new", "session/load", "session/list", "session/delete"})
 
 
 def run_stdio(name: str, *, url: str | None = None) -> int:
@@ -139,7 +139,7 @@ def _pump(sock: socket.socket, worker: str) -> int:
                     if obj.get("id") is not None:
                         send_out(_method_not_found(obj.get("id")))
                     continue
-                if method in SESSION_OPEN:
+                if method in SESSION_META:
                     obj = _inject_worker(obj, worker)
                 try:
                     send_ws(obj)
